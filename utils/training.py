@@ -1,0 +1,417 @@
+from __future__ import print_function
+
+import torch
+from torch.autograd import Variable
+
+import numpy as np
+import torch.nn.functional as F 
+import pdb
+import itertools as it
+import torchvision
+import visdom
+import time
+import math
+
+vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+                    use_incoming_socket=False)
+assert vis.check_connection()
+
+
+def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader, 
+                             model, optimizer, dr, model_name='vae', prev_model=None):
+    from utils.evaluation import evaluate_vae as evaluate
+    from utils.helpers import print_and_log_scalar
+
+    # Save the arguments to keep track of the used config
+    torch.save(arguments, dr + '.config')
+
+    # best_model = model
+    best_loss = 100000
+    e = 0
+    train_loss_history = []
+    train_re_history = []
+    train_kl_history = []
+
+    val_loss_history = []
+    val_re_history = []
+    val_kl_history = []
+
+    time_history = []
+
+    for epoch in range(1, arguments.epochs + 1):
+        time_start = time.time()
+        if prev_model == None:
+            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, arguments, train_loader, model, optimizer)
+            samples = model.generate_x(100)
+            vis.images(samples.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+                                       arguments.input_size[2]), win='samples_x')
+        else:
+            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae_multihead(epoch, arguments, train_loader, model, optimizer, prev_model=prev_model)
+            samples1 = model.generate_x(100, head=0)
+            samples2 = model.generate_x(100, head=1)
+            vis.images(samples1.reshape(-1, 1, 28, 28), win='xgen1')
+            vis.images(samples2.reshape(-1, 3, 32, 32), win='xgen2')
+
+        val_results = evaluate(arguments, model, train_loader, val_loader, epoch, dr, mode='validation', prev_model=prev_model)
+
+        val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
+        
+        time_end = time.time()
+
+        time_elapsed = time_end - time_start
+
+        # appending history
+        train_loss_history.append(train_loss_epoch), train_re_history.append(train_re_epoch), train_kl_history.append(
+            train_kl_epoch)
+        val_loss_history.append(val_loss_epoch), val_re_history.append(val_re_epoch), val_kl_history.append(
+           val_kl_epoch)
+        time_history.append(time_elapsed)
+
+        # printing results
+        print('Epoch: {}/{}, Time elapsed: {}s\n'
+              '* Train loss: {}   (RE: {}, KL: {})\n'
+              'o Val.  loss: {}   (RE: {}, KL: {})\n'
+              '--> Early stopping: {}/{} (BEST: {})\n'.format(
+            epoch, arguments.epochs, time_elapsed,
+            train_loss_epoch, train_re_epoch, train_kl_epoch,
+            val_loss_epoch, val_re_epoch, val_kl_epoch,
+            e, arguments.early_stopping_epochs, best_loss
+        ))
+        
+        # early-stopping
+        if val_loss_epoch < best_loss:
+            e = 0
+            best_loss = val_loss_epoch
+            # best_model = model
+            print('model saved')
+            torch.save(model.state_dict(), dr + '.model')
+        else:
+            e += 1
+            if epoch < arguments.warmup:
+                e = 0
+            if e > arguments.early_stopping_epochs:
+                break
+
+        # NaN
+        if math.isnan(val_loss_epoch):
+            break
+
+    # FINAL EVALUATION
+    #model.load_state_dict(torch.load(dr + '.model'))
+    #res = evaluate(arguments, model, train_loader, test_loader, 9999, dr, mode='test')
+
+    #test_loss, test_re, test_kl, test_log_likelihood, train_log_likelihood, test_elbo, train_elbo = res['test_loss'], res['test_re'], res['test_kl'], res['test_ll'], res['train_ll'], res['test_elbo'], res['train_elbo']
+
+    #print('FINAL EVALUATION ON TEST SET\n'
+    #      'LogL (TEST): {:.2f}\n'
+    #      'LogL (TRAIN): {:.2f}\n'
+    #      'ELBO (TEST): {:.2f}\n'
+    #      'ELBO (TRAIN): {:.2f}\n'
+    #      'Loss: {:.2f}\n'
+    #      'RE: {:.2f}\n'
+    #      'KL: {:.2f}'.format(
+    #    test_log_likelihood,
+    #    train_log_likelihood,
+    #    test_elbo,
+    #    train_elbo,
+    #    test_loss,
+    #    test_re,
+    #    test_kl
+    #))
+
+def experiment_vae(arguments, train_loader, val_loader, test_loader, 
+                   model, optimizer, dr, model_name='vae', prev_model=None, dg=0):
+    from utils.evaluation import evaluate_vae as evaluate
+    from utils.helpers import print_and_log_scalar
+
+    # Save the arguments to keep track of the used config
+    torch.save(arguments, dr + '.config')
+
+    # best_model = model
+    best_loss = 100000
+    e = 0
+    train_loss_history = []
+    train_re_history = []
+    train_kl_history = []
+
+    val_loss_history = []
+    val_re_history = []
+    val_kl_history = []
+
+    time_history = []
+
+    for epoch in range(1, arguments.epochs + 1):
+        time_start = time.time()
+        if prev_model == None:
+            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, arguments, train_loader, model, optimizer, dg=dg)
+            samples = model.generate_x(100)
+        else:
+            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, arguments, train_loader, model, optimizer, prev_model=prev_model, dg=dg)
+            samples = model.generate_x(100)
+        vis.images(samples.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+                                       arguments.input_size[2]), win='samples_x')
+
+        
+        val_results = evaluate(arguments, model, train_loader, val_loader, epoch, dr, mode='validation', prev_model=prev_model)
+
+        val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
+        
+        time_end = time.time()
+
+        time_elapsed = time_end - time_start
+
+        # appending history
+        train_loss_history.append(train_loss_epoch), train_re_history.append(train_re_epoch), train_kl_history.append(
+            train_kl_epoch)
+        val_loss_history.append(val_loss_epoch), val_re_history.append(val_re_epoch), val_kl_history.append(
+           val_kl_epoch)
+        time_history.append(time_elapsed)
+
+        # printing results
+        print('Epoch: {}/{}, Time elapsed: {}s\n'
+              '* Train loss: {}   (RE: {}, KL: {})\n'
+              'o Val.  loss: {}   (RE: {}, KL: {})\n'
+              '--> Early stopping: {}/{} (BEST: {})\n'.format(
+            epoch, arguments.epochs, time_elapsed,
+            train_loss_epoch, train_re_epoch, train_kl_epoch,
+            val_loss_epoch, val_re_epoch, val_kl_epoch,
+            e, arguments.early_stopping_epochs, best_loss
+        ))
+        
+        # early-stopping
+        if val_loss_epoch < best_loss:
+            e = 0
+            best_loss = val_loss_epoch
+            # best_model = model
+            print('model saved')
+            torch.save(model.state_dict(), dr + '.model')
+        else:
+            e += 1
+            if epoch < arguments.warmup:
+                e = 0
+            if e > arguments.early_stopping_epochs:
+                break
+
+        # NaN
+        if math.isnan(val_loss_epoch):
+            break
+
+    
+
+def train_vae(epoch, args, train_loader, model, optimizer, prev_model=None, dg=0):
+    # set loss to 0
+    train_loss = 0
+    train_re = 0
+    train_kl = 0
+    # set model in training mode
+    model.train()
+
+    # start training
+    if args.warmup == 0:
+        beta = 1.
+    else:
+        beta = 1.* epoch / args.warmup
+        if beta > 1.:
+            beta = 1.
+    print('beta: {}'.format(beta))
+
+    for batch_idx, (data, target) in enumerate(it.islice(train_loader, 0, None)):
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+        data, target = Variable(data), Variable(target)
+
+        if data.size(0) == 1:
+            data = torch.cat([data, data], dim=0)
+
+        if (prev_model != None) and (args.replay_type == 'replay'):
+            if args.replay_size == 'constant':
+                dg = 0 
+            x_replay = prev_model.generate_x((dg+1)*data.size(0))
+            data = torch.cat([data, x_replay], dim=0)
+
+        #if len(data.shape) > 2:
+        #    data = data.reshape(data.size(0), -1)
+        # dynamic binarization
+        if args.dynamic_binarization:
+            x = torch.bernoulli(data)
+        else:
+            x = data
+
+        # reset gradients
+        optimizer.zero_grad()
+        # loss evaluation (forward pass)
+        loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
+        if (args.replay_type == 'prototype') and (dg > 0):
+            loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta, average=True)
+            loss = loss + loss_p
+        
+        if batch_idx % 300 == 0:
+            print('batch {}, loss {}'.format(batch_idx, loss))
+
+            if args.dataset_name == 'celeba':
+                gen_data = model.generate_x(64).reshape(-1, 3, 64, 64)
+                torchvision.utils.save_image(gen_data, 
+                                         'temp/{}_samples_{}.png'.format(args.prior, args.dataset_name))
+
+        
+        # backward pass
+        loss.backward()
+        # optimization
+        optimizer.step()
+        
+        if model.args.prior == 'GMM':
+            model.pis.data = model.pis.data.abs() / model.pis.data.abs().sum()
+            if model.GMM.covariance_type == 'diag':
+                model.sigs.data = F.relu(model.sigs.data)
+
+        train_loss += loss.item()
+        train_re += -RE.item()
+        train_kl += KL.item()
+
+    # calculate final loss
+    train_loss /= len(train_loader)  # loss function already averages over batch size
+    train_re /= len(train_loader)  # re already averages over batch size
+    train_kl /= len(train_loader)  # kl already averages over batch size
+
+    return model, train_loss, train_re, train_kl
+
+def train_vae_multihead(epoch, args, train_loader, model, optimizer, prev_model):
+    # set loss to 0
+    train_loss = 0
+    train_re = 0
+    train_kl = 0
+    # set model in training mode
+    model.train()
+
+    # start training
+    if args.warmup == 0:
+        beta = 1.
+    else:
+        beta = 1.* epoch / args.warmup
+        if beta > 1.:
+            beta = 1.
+    print('beta: {}'.format(beta))
+
+    for batch_idx, (data, target) in enumerate(it.islice(train_loader, 0, None)):
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+        data, target = Variable(data), Variable(target)
+
+        x_replay = prev_model.generate_x(data.size(0))
+
+        #if len(data.shape) > 2:
+        #    data = data.reshape(data.size(0), -1)
+        # dynamic binarization
+        if args.dynamic_binarization:
+            x = torch.bernoulli(data)
+        else:
+            x = data
+
+        # reset gradients
+        optimizer.zero_grad()
+        # loss evaluation (forward pass)
+
+        loss_2, RE_2, KL_2, xhat = model.calculate_loss(x.reshape(x.size(0), -1), beta, average=True, head=1)
+        loss_1, RE_1, KL_1, _ = model.calculate_loss(x_replay.reshape(x.size(0), -1), beta, average=True, head=0)
+        loss = loss_1 + loss_2
+
+        
+        if batch_idx % 300 == 0:
+            print('batch {}, loss {}'.format(batch_idx, loss))
+           
+            opts = {'title' : 'xhat'}
+            vis.images(xhat.reshape(-1, 3, 32, 32), win='xhat', opts=opts)
+            
+            opts = {'title' : 'x'}
+            vis.images(x.reshape(-1, 3, 32, 32), win='x', opts=opts)
+
+            if args.dataset_name == 'celeba':
+                gen_data = model.generate_x(64).reshape(-1, 3, 64, 64)
+                torchvision.utils.save_image(gen_data, 
+                                         'temp/{}_samples_{}.png'.format(args.prior, args.dataset_name))
+
+        if epoch % 10 == 0:
+            if args.dataset_name == 'patch_celeba':
+                gen_data = model.generate_x(64).reshape(-1, 3, 16, 16)
+                torchvision.utils.save_image(gen_data, 
+                                         'temp/{}_samples_{}.png'.format(args.prior, args.dataset_name))
+
+
+        # backward pass
+        loss.backward()
+        # optimization
+        optimizer.step()
+        
+        if model.args.prior == 'GMM':
+            model.pis.data = model.pis.data.abs() / model.pis.data.abs().sum()
+            if model.GMM.covariance_type == 'diag':
+                model.sigs.data = F.relu(model.sigs.data)
+
+        train_loss += loss.item()
+        train_re += -RE_1.item() - RE_2.item()
+        train_kl += KL_1.item() + KL_2.item()
+
+    # calculate final loss
+    train_loss /= len(train_loader)  # loss function already averages over batch size
+    train_re /= len(train_loader)  # re already averages over batch size
+    train_kl /= len(train_loader)  # kl already averages over batch size
+
+    return model, train_loss, train_re, train_kl
+
+
+
+def train_rnn_on_zs(args, vae, train_loader, rn, optimizer, phase='two_step'):
+
+    Lout = int(np.prod(args.input_size))
+    for ep in range(args.epochs):
+        for i, (dt, _) in enumerate(train_loader):
+
+            #vis.images(dt[0].reshape(-1, 1, 28, 28), win='ex1')
+            dt = dt.cuda()
+
+            optimizer.zero_grad()
+            mu, logvar = vae.q_z(dt.reshape(-1, Lout))
+            h_target = torch.randn(mu.size()).cuda()*(0.5*logvar).exp() + mu
+            h_target = h_target.reshape(dt.size(0), dt.size(1), mu.size(-1))
+
+            hhat, _ = rn.forward(h_target[:, :-1, :])
+
+            #err = (hhat - h_target[:, 1:, :].reshape(-1, hhat.size(-1))).pow(2).mean()
+
+            x_mean, _ = vae.p_x(hhat)
+            x_mean_target, _ = vae.p_x(h_target.reshape(-1, hhat.size(-1)))
+            
+            dt_targets = dt[:, 1:, :, :, :].reshape(x_mean.size(0), -1) 
+            err = (dt_targets - x_mean).abs().mean()
+
+            err.backward()
+            optimizer.step()
+            
+            print('error {} epoch {} phase {}'.format(err.item(), ep, phase))
+        opts = {}
+        opts['title'] = 'xhat'
+        sz = args.input_size
+
+        if args.dataset_name == 'patch_celeba':
+            N = 16
+            nrow = 4
+        else:
+            N = 100
+            nrow = 8
+
+        vis.images(x_mean[:N].reshape(-1, sz[0], sz[1], sz[2]).cpu().data, win='xhat', opts=opts, nrow=nrow)
+        
+        opts['title'] = 'real targets'
+        vis.images(dt[0][:N].reshape(-1, sz[0], sz[1], sz[2]).cpu() , win='real_targets', opts=opts, nrow=nrow)
+
+        opts['title'] = 'xhat targets'
+        vis.images(x_mean_target[:N].reshape(-1, sz[0], sz[1], sz[2]).cpu().data, win='xhat_target', opts=opts, nrow=nrow)
+
+        opts['title'] = 'hhat'
+        vis.heatmap(hhat[:15], win='hhat', opts=opts)
+
+        opts['title'] = 'htargets'
+        vis.heatmap(h_target[0][1:16], win='htarget', opts=opts)
+
+
+
