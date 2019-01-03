@@ -295,3 +295,22 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
                 'test_re' : evaluate_re.item(),
                 'test_kl': evaluate_kl.item()} 
 
+def evaluate_classifier(args, classifier, data_loader):
+
+    all_lbls = []
+    all_preds = []
+
+    for batch_idx, (data, target) in enumerate(it.islice(data_loader, 0, None)):
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+        data, target = Variable(data), Variable(target)
+
+        all_preds.append(classifier.forward(data))
+        all_lbls.append(target)
+
+    all_preds_cat = torch.argmax(torch.cat(all_preds, dim=0), dim=1)
+    all_lbls_cat = torch.cat(all_lbls, dim=0)
+
+    acc = (all_preds_cat == all_lbls_cat).float().mean()
+    return acc, all_preds_cat
+

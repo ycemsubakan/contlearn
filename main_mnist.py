@@ -11,8 +11,9 @@ import utilities as ut
 import pickle
 
 from utils.optimizer import AdamNormGrad
-from utils.evaluation import evaluate_vae as evaluate
-from utils.training import experiment_vae 
+import utils.evaluation as ev
+import utils.training as tr 
+from models.VAE import classifier as cls
 
 vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
                     use_incoming_socket=False)
@@ -50,7 +51,7 @@ parser.add_argument('--input_size', type=int, default=[1, 28, 28], metavar='D',
 parser.add_argument('--activation', type=str, default=None, metavar='ACT',
                     help='activation function')
 
-parser.add_argument('--number_components', type=int, default=500, metavar='NC',
+parser.add_argument('--number_components', type=int, default=50, metavar='NC',
                     help='number of pseudo-inputs')
 parser.add_argument('--number_components_init', type=int, default=50, metavar='NC',
                     help='number of pseudo-inputs initial number')
@@ -66,7 +67,7 @@ parser.add_argument('--use_training_data_init', action='store_true', default=Fal
 parser.add_argument('--model_name', type=str, default='vae', metavar='MN',
                     help='model name: vae, hvae_2level, convhvae_2level, pixelhvae_2level')
 parser.add_argument('--prior', type=str, default='vampprior', metavar='P',
-                    help='prior: standard, vampprior')
+                    help='prior: standard, vampprior, vampprior_short')
 parser.add_argument('--cov_type', type=str, default='diag', metavar='P',
                     help='cov_type: diag, full')
 parser.add_argument('--input_type', type=str, default='binary', metavar='IT',
@@ -86,13 +87,28 @@ parser.add_argument('--dynamic_binarization', action='store_true', default=False
 
 # replay parameters
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
+ad -y /tmp/v1uYgbO/3.ipy
+
 parser.add_argument('--replay_type', type=str, default='replay', help='replay, prototype') 
+
+
 parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
+
+parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
+parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
+parser.add_argument('--restart_means', type=int, default=0, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
+parser.add_argument('--use_replaycostcorrection', type=int, default=1, help='whether or not to use a constant for replay cost correction, {0, 1}')
+
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
+
+# things to add: balancing via classifier, adding constants to the loss function for replay balancing
 
 
 arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
+arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 torch.manual_seed(arguments.seed)
 if arguments.cuda:
@@ -139,51 +155,74 @@ else:
 # start training
 cwd = os.getcwd() + '/'
 all_results = []
-results_name = arguments.dataset_name + '_' + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + arguments.notes
 
+exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  + '_use_replaycostcorrection_' + str(args.use_replaycostcorrection) + arguments.notes
+results_name = arguments.dataset_name + '_' + exp_details
+
+model = VAE(arguments).cuda()
+if arguments.use_classifier:
+    classifier = cls(arguments, 100, 784).cuda()
+else: 
+    classifier = None
+
+# implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, 10):
     train_loader = ut.get_mnist_loaders([dg], 'train', arguments)
     val_loader = ut.get_mnist_loaders(list(range(dg+1)), 'validation', arguments)
     test_loader = ut.get_mnist_loaders(list(range(dg+1)), 'test', arguments)
 
-    model_name = arguments.dataset_name + str(dg) + '_' + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_' + str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap)
+    model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
 
     model_path = cwd + files_path + model_name + '.model'
-
     if dg == 0:
-        if 1 & os.path.exists(model_path):
-            print('loading model... for digit {}'.format(dg))
+        prev_model = None
+        prev_classifier = None
 
-            model = VAE(arguments).cuda()
-            model.load_state_dict(torch.load(model_path))
-        else:
-            print('training model... for digit {}'.format(dg))
-            model = VAE(arguments).cuda()
+    if arguments.use_classifier == True:
+        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
 
-            optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
-            experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
-                           optimizer, dr, arguments.model_name) 
+        tr.train_classifier(arguments, train_loader, classifier=classifier, 
+                            prev_classifier=prev_classifier,
+                            prev_model=prev_model,
+                            optimizer_cls=optimizer_cls, dg=dg)
+
+        acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+        print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
+
+    if 1 & os.path.exists(model_path):
+        print('loading model... for digit {}'.format(dg))
+
+        model.load_state_dict(torch.load(model_path))
+        model = model.cuda()
     else:
-        if 1 & os.path.exists(model_path):
-            print('loading model... for digit {}'.format(dg))
+        print('training model... for digit {}'.format(dg))
+        optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
+        model = model.cuda()
+        tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
+                          optimizer, dr, arguments.model_name, prev_model=prev_model, 
+                          dg=dg) 
 
-            #model = VAE(arguments).cuda()
-            model.load_state_dict(torch.load(model_path))
-        else:
-            print('training model... for digit {}'.format(dg))
-            #model = VAE(arguments)
+    if arguments.use_classifier and arguments.use_mixingw_correction:
+        model.balance_mixingw(classifier, dg=dg)
+        vis.text(str(model.mixingw_c), win='mixingw')
 
-            model = model.cuda()
-            optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
-            experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
-                           optimizer, dr, arguments.model_name, prev_model=prev_model, dg=dg) 
-        
+                    
+    if (dg > 0) and arguments.separate_means:
+        model.merge_latent()
     print('evaluating the model...')
-    results = evaluate(arguments, model, train_loader, test_loader, 0, results_path, 'test')
-    results['digit'] = dg
-    all_results.append(results)
-    pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+
+    # when doing the hyperparameter search, pay attention to what results you are saving
+    if 1: 
+        try:
+            temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
+            all_results.append(temp[dg])
+        except:
+            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
+            results['digit'] = dg
+            results['class'] = acc.item()
+            all_results.append(results)
+            pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
     
     if arguments.replay_type == 'replay': 
         prev_model = copy.deepcopy(model)
@@ -195,6 +234,51 @@ for dg in range(0, 10):
         model.prototypes = model.prototypes.data
         prev_model = None
 
+    if arguments.use_classifier:
+        prev_classifier = copy.deepcopy(classifier)
+    
+    #opts={}
+    #opts['title'] = 'means1'
+    #means = model.reconstruct_means(head=0)
+    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+    #                         arguments.input_size[2]), win='means1', opts=opts)
+
+    # little questionable 
     if arguments.add_cap and (dg < 9):
         model.add_latent_cap(dg)
+    else:
+        model.restart_latent_space()
+
+    #opts={}
+    #opts['title'] = 'means2'
+
+    ##model.merge_latent()
+    #means = model.reconstruct_means(head=0)
+    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+    #                         arguments.input_size[2]), win='means2', opts=opts)
+
+    #opts={}
+    #opts['title'] = 'means3'
+
+    ##model.merge_latent()
+    #means = model.reconstruct_means(head=1)
+    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+    #                         arguments.input_size[2]), win='means3', opts=opts)
+
+
+    #opts['title'] = 'means3'
+    #model.separate_latent()
+    #means = model.reconstruct_means(head=0)
+    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+    #                         arguments.input_size[2]), win='means3', opts=opts)
+
+
+    #opts['title'] = 'means4'
+    #model.merge_latent()
+    #means = model.reconstruct_means(head=0)
+    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+    #                         arguments.input_size[2]), win='means4', opts=opts)
+
+
+    #pdb.set_trace()
 

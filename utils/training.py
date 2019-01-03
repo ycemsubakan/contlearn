@@ -11,6 +11,8 @@ import torchvision
 import visdom
 import time
 import math
+import torch.nn as nn
+import copy
 
 vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
                     use_incoming_socket=False)
@@ -120,7 +122,8 @@ def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader,
     #))
 
 def experiment_vae(arguments, train_loader, val_loader, test_loader, 
-                   model, optimizer, dr, model_name='vae', prev_model=None, dg=0):
+                   model, optimizer, dr, model_name='vae', prev_model=None, 
+                   classifier=None, prev_classifier=None, optimizer_cls=None, dg=0):
     from utils.evaluation import evaluate_vae as evaluate
     from utils.helpers import print_and_log_scalar
 
@@ -142,17 +145,33 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
 
     for epoch in range(1, arguments.epochs + 1):
         time_start = time.time()
-        if prev_model == None:
-            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, arguments, train_loader, model, optimizer, dg=dg)
-            samples = model.generate_x(100)
-        else:
-            model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, arguments, train_loader, model, optimizer, prev_model=prev_model, dg=dg)
-            samples = model.generate_x(100)
+        #if prev_model == None:
+        model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, 
+        arguments, train_loader, model, optimizer, classifier=classifier, prev_classifier=prev_classifier, prev_model=prev_model, optimizer_cls=optimizer_cls, dg=dg)
+
+        # merge the means for evaluation and sampling
+        if (dg > 0) and arguments.separate_means: 
+            model.merge_latent()
+        samples = model.generate_x(100)
         vis.images(samples.reshape(-1, arguments.input_size[0], arguments.input_size[1],
                                        arguments.input_size[2]), win='samples_x')
 
         
         val_results = evaluate(arguments, model, train_loader, val_loader, epoch, dr, mode='validation', prev_model=prev_model)
+        
+        # separate the means for the rest of the training
+        if (dg > 0) and arguments.separate_means:
+            model.separate_latent()
+
+        means = model.reconstruct_means(head=0)
+        vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+                                       arguments.input_size[2]), win='means')
+
+        if dg > 0:
+            means = model.reconstruct_means(head=1)
+            vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+                                     arguments.input_size[2]), win='means2')
+
 
         val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
         
@@ -196,9 +215,59 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         if math.isnan(val_loss_epoch):
             break
 
-    
 
-def train_vae(epoch, args, train_loader, model, optimizer, prev_model=None, dg=0):
+def train_classifier(args, train_loader,  
+                     classifier=None, prev_classifier=None, prev_model=None, 
+                     optimizer_cls=None, dg=0):
+
+    # start training
+    EP = 25 
+    for ep in range(EP):
+        for batch_idx, (data, target) in enumerate(it.islice(train_loader, 0, None)):
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+
+            # to avoid the singleton case
+            if data.size(0) == 1:
+                data = torch.cat([data, data], dim=0)
+
+            optimizer_cls.zero_grad()
+            yhat = classifier.forward(data)
+            cent = nn.CrossEntropyLoss()
+
+            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(dg).cuda()
+            loss_cls = cent(yhat, targets)
+
+            if dg > 0: 
+                if args.replay_size == 'increase':
+                    cst = copy.deepcopy(dg) 
+                else:
+                    cst = 1
+                x_gen = prev_model.generate_x(cst*args.batch_size, replay=True)
+                prev_targets = torch.argmax(prev_classifier.forward(x_gen), dim=1) 
+                yhat_prev = classifier.forward(x_gen)
+                loss_cls_prev = cent(yhat_prev, prev_targets)
+
+                if args.use_replaycostcorrection:
+                    loss_cls = loss_cls + dg*loss_cls_prev
+                else:
+                    loss_cls = loss_cls + loss_cls_prev
+
+            # backward pass
+            loss_cls.backward()
+            # optimization
+            optimizer_cls.step()
+        
+        print('EP {} batch {}, loss {}'.format(ep, batch_idx, loss_cls))
+
+
+
+
+def train_vae(epoch, args, train_loader, model, 
+              optimizer, classifier=None, prev_classifier=None, prev_model=None, 
+              optimizer_cls=None, dg=0):
+
     # set loss to 0
     train_loss = 0
     train_re = 0
@@ -220,15 +289,24 @@ def train_vae(epoch, args, train_loader, model, optimizer, prev_model=None, dg=0
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data), Variable(target)
 
+        # to avoid the singleton case
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
 
         if (prev_model != None) and (args.replay_type == 'replay'):
             if args.replay_size == 'constant':
-                dg = 0 
-            x_replay = prev_model.generate_x((dg+1)*data.size(0))
-            data = torch.cat([data, x_replay], dim=0)
+                cst = 1 
+            else:
+                cst = copy.deepcopy(dg)
+            x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+            if epoch % 10 == 0:
+                print('replay size {}'.format(x_replay.size(0)))
+            
+            if args.replay_size == 'increase': 
+                data = torch.cat([data, x_replay], dim=0)
 
+
+        
         #if len(data.shape) > 2:
         #    data = data.reshape(data.size(0), -1)
         # dynamic binarization
@@ -239,8 +317,29 @@ def train_vae(epoch, args, train_loader, model, optimizer, prev_model=None, dg=0
 
         # reset gradients
         optimizer.zero_grad()
+        
         # loss evaluation (forward pass)
-        loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
+        if args.separate_means and (dg > 0) and (args.replay_size == 'constant'):
+            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
+            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=1)
+
+            loss = loss1 + loss2
+            RE = RE1 + RE2
+            KL = KL1 + KL2 
+        elif (args.separate_means == False) and (dg > 0) and (args.replay_size == 'constant'):
+            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
+            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=0)
+
+            if args.use_replaycostcorrection:
+                loss = dg*loss1 + loss2
+            else:
+                loss = loss1 + loss2
+
+            RE = RE1 + RE2
+            KL = KL1 + KL2 
+        elif (args.separate_means == False) and (dg == 0) and (args.replay_size == 'increase'):
+            loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
+        
         if (args.replay_type == 'prototype') and (dg > 0):
             loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta, average=True)
             loss = loss + loss_p
@@ -248,12 +347,6 @@ def train_vae(epoch, args, train_loader, model, optimizer, prev_model=None, dg=0
         if batch_idx % 300 == 0:
             print('batch {}, loss {}'.format(batch_idx, loss))
 
-            if args.dataset_name == 'celeba':
-                gen_data = model.generate_x(64).reshape(-1, 3, 64, 64)
-                torchvision.utils.save_image(gen_data, 
-                                         'temp/{}_samples_{}.png'.format(args.prior, args.dataset_name))
-
-        
         # backward pass
         loss.backward()
         # optimization
