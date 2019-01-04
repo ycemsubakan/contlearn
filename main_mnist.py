@@ -189,7 +189,7 @@ for dg in range(0, 10):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if 1 & os.path.exists(model_path):
+    if 0 & os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
@@ -212,7 +212,7 @@ for dg in range(0, 10):
     print('evaluating the model...')
 
     # when doing the hyperparameter search, pay attention to what results you are saving
-    if 0: 
+    if 1: 
         try:
             temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
             all_results.append(temp[dg])
