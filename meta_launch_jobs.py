@@ -5,7 +5,7 @@ import time
 import sys
 
 
-PRIORS = ['standard','vamprior_short']
+PRIORS = ['standard','vampprior_short']
 REPLAYS = ['constant','increase']
 ADD_CAP = [0]
 #CLASSIFIER = [1]

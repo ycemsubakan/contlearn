@@ -21,6 +21,8 @@ assert vis.check_connection()
 
 parser = argparse.ArgumentParser(description='Multitask experiments')
 
+parser.add_argument('--use_visdom', type=int, default=1, 
+                    help='use/not use visdom, {0, 1}')
 parser.add_argument('--batch_size', type=int, default=100, metavar='BStrain',
                     help='input batch size for training (default: 100)')
 parser.add_argument('--test_batch_size', type=int, default=100, metavar='BStest',
@@ -51,9 +53,9 @@ parser.add_argument('--input_size', type=int, default=[1, 28, 28], metavar='D',
 parser.add_argument('--activation', type=str, default=None, metavar='ACT',
                     help='activation function')
 
-parser.add_argument('--number_components', type=int, default=50, metavar='NC',
+parser.add_argument('--number_components', type=int, default=500, metavar='NC',
                     help='number of pseudo-inputs')
-parser.add_argument('--number_components_init', type=int, default=50, metavar='NC',
+parser.add_argument('--number_components_init', type=int, default=500, metavar='NC',
                     help='number of pseudo-inputs initial number')
 
 parser.add_argument('--pseudoinputs_mean', type=float, default=-0.05, metavar='PM',
@@ -204,7 +206,8 @@ for dg in range(0, 10):
 
     if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
         model.balance_mixingw(classifier, dg=dg)
-        vis.text(str(model.mixingw_c), win='mixingw')
+        if argument.use_visdom:
+            vis.text(str(model.mixingw_c), win='mixingw')
 
                     
     if (dg > 0) and arguments.separate_means:

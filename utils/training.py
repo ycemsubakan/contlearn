@@ -153,7 +153,8 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         if (dg > 0) and arguments.separate_means: 
             model.merge_latent()
         samples = model.generate_x(100)
-        vis.images(samples.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+        if arguments.use_visdom:
+            vis.images(samples.reshape(-1, arguments.input_size[0], arguments.input_size[1],
                                        arguments.input_size[2]), win='samples_x')
 
         
@@ -165,13 +166,13 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
 
         if arguments.prior == 'vampprior_short':
             means = model.reconstruct_means(head=0)
-            vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-                                           arguments.input_size[2]), win='means')
+            if arguments.use_visdom:
+                vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1], arguments.input_size[2]), win='means')
 
-            if dg > 0:
-                means = model.reconstruct_means(head=1)
-                vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-                                         arguments.input_size[2]), win='means2')
+            #if dg > 0:
+            #    means = model.reconstruct_means(head=1)
+            #    vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
+            #                             arguments.input_size[2]), win='means2')
 
 
         val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
