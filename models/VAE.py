@@ -30,7 +30,6 @@ from utils.nn import he_init, GatedDense, NonLinear, \
     Conv2d, GatedConv2d, GatedResUnit, ResizeGatedConv2d, MaskedConv2d, ResUnitBN, ResizeConv2d, GatedResUnit, GatedConvTranspose2d
 
 
-#=======================================================================================================================
 class VAE(Model):
     def __init__(self, args):
         super(VAE, self).__init__(args)
@@ -56,6 +55,7 @@ class VAE(Model):
         #elif self.args.input_type in ['gray', 'continuous', 'color']:
         #    self.p_x_mean = NonLinear(300, np.prod(self.args.input_size), activation=nn.Sigmoid())
         #    self.p_x_logvar = NonLinear(300, np.prod(self.args.input_size), activation=nn.Hardtanh(min_val=-4.5,max_val=0))
+        self.mixingw_c = np.ones(self.args.number_components)
 
         # weights initialization
         for m in self.modules():
@@ -63,10 +63,8 @@ class VAE(Model):
                 he_init(m)
 
         # add pseudo-inputs if VampPrior
-        if self.args.prior == 'vampprior':
-            self.add_pseudoinputs(separate_means=True)
-        elif self.args.prior == 'vampprior_joint':
-            self.add_pseudoinputs(separate_means=False)
+        if self.args.prior in ['vampprior', 'vampprior_short']:
+            self.add_pseudoinputs()
         elif self.args.prior == 'GMM': 
             self.initialize_GMMparams(Kmog=10, mode='random') 
 
@@ -93,7 +91,7 @@ class VAE(Model):
             us_new = NonLinear(self.args.number_components, np.prod(self.args.input_size), bias=False, activation=nonlinearity)
             self.means.append(us_new)
         elif self.args.prior == 'vampprior_joint':
-            nonlinearity = nn.Hardtanh(min_val=0.0, max_val=1.0)
+            nonlinearity = None #nn.Hardtanh(min_val=0.0, max_val=1.0)
             
             us_new = NonLinear(2*self.args.number_components, 300, bias=False, activation=nonlinearity)
             oldweights = self.means.linear.weight.data 
@@ -107,23 +105,115 @@ class VAE(Model):
 
         self.extra_head = True
 
+    def restart_latent_space(self):
+        nonlinearity = nn.Hardtanh(min_val=0.0, max_val=1.0)
+        self.means = NonLinear(self.args.number_components_init, 300, bias=False, activation=nonlinearity)
+
+        if self.args.use_vampmixingw:
+            self.mixingw = NonLinear(self.args.number_components_init, 1, bias=False, activation=nn.Softmax(dim=0))
+
+    def merge_latent(self):
+        # always to be called after separate_latent() or add_latent_cap()
+        nonlinearity = None #nn.Hardtanh(min_val=0.0, max_val=1.0)
+        
+        prev_weights = self.means[0].linear.weight.data
+        last_prev_weights = self.means[1].linear.weight.data 
+        all_old = torch.cat([prev_weights, last_prev_weights], dim=1)
+
+        self.means[0] = NonLinear(all_old.size(1), 300, bias=False, activation=nonlinearity).cuda()
+        self.means[0].linear.weight.data = all_old
+
+    def separate_latent(self):
+        # always to be called after merge_latent()
+        nonlinearity = None #nn.Hardtanh(min_val=0.0, max_val=1.0)
+
+        number_components_init = self.args.number_components_init
+        number_components_prev = (self.args.number_components) - number_components_init
+        
+        prev_components = copy.deepcopy(self.means[0].linear.weight.data[:, :number_components_prev:])
+
+        last_prev_components = copy.deepcopy(self.means[0].linear.weight.data[:, number_components_prev:])
+
+        self.means[0] = NonLinear(number_components_prev, 300, bias=False, activation=nonlinearity).cuda()
+        self.means[1] = NonLinear(number_components_init, 300, bias=False, activation=nonlinearity).cuda()
+        self.means[0].linear.weight.data = prev_components
+        self.means[1].linear.weight.data = last_prev_components
+
+
     def add_latent_cap(self, dg):
-        if self.args.prior == 'vampprior_joint':
-            nonlinearity = nn.Hardtanh(min_val=0.0, max_val=1.0)
+        if self.args.prior == 'vampprior_short':
+            nonlinearity = None #nn.Hardtanh(min_val=0.0, max_val=1.0)
                 
-            us_new = NonLinear((dg+2)*(self.args.number_components_init), 300, bias=False, activation=nonlinearity).cuda()
-            #oldweights = self.means.linear.weight.data 
-            #us_new.linear.weight.data[:, :self.args.number_components] = oldweights 
-            self.means = us_new
-
+            number_components_prev = copy.deepcopy(self.args.number_components) 
             self.args.number_components = (dg+2)*copy.deepcopy((self.args.number_components_init))
-            # fix the idle input size also
-            self.idle_input = torch.eye(self.args.number_components,
-                                        self.args.number_components).cuda()
+
+            if self.args.separate_means:    
+                add_number_components = self.args.number_components - number_components_prev
+                # set the idle inputs 
+                #self.idle_input = torch.eye(self.args.number_components,
+                #                            self.args.number_components).cuda()
+                #self.idle_input1 = torch.eye(add_number_components,
+                #                             add_number_components).cuda()
+                #self.idle_input2 = torch.eye(number_components_prev,
+                #                             number_components_prev).cuda()
+
+                us_new = NonLinear(add_number_components, 300, bias=False, activation=nonlinearity).cuda()
+                #us_new.linear.weight.data = 0*torch.randn(300, add_number_components).cuda()
+                if dg == 0:
+                    self.means.append(us_new)
+                else:
+                    # self.merge_latent() - nope, because we do this because validation evaluation (in main_mnist.py)
+                    self.means[1] = us_new
+
+            else:
+                self.idle_input = torch.eye(self.args.number_components,
+                                            self.args.number_components).cuda()
+
+                us_new = NonLinear(self.args.number_components, 300, bias=False, activation=nonlinearity).cuda()
+                if not self.args.restart_means:
+                    oldweights = self.means.linear.weight.data 
+                    us_new.linear.weight.data[:, :number_components_prev] = oldweights 
+                self.means = us_new
+
+                if self.args.use_vampmixingw:
+                    self.mixingw = NonLinear(self.args.number_components, 1, bias=False, 
+                                             activation=nn.Softmax(dim=0)) 
+
+    def reconstruct_means(self, head=0):
+        if self.args.separate_means:
+            K = self.means[head].linear.weight.size(1)
+            eye = torch.eye(K, K).cuda()
+
+            X = self.means[head](eye)
+        else: 
+            K = self.means.linear.weight.size(1)
+            eye = torch.eye(K, K).cuda()
+
+            X = self.means(eye)
+        z_mean = self.q_z_mean(X)
+
+        recons, _ = self.p_x(z_mean, head=0)
+
+        return recons 
+
+    def balance_mixingw(self, classifier, dg, vis=None):
+        means = self.reconstruct_means()
+        yhat_means = torch.argmax(classifier.forward(means), dim=1)
+
+        mixingw_c = torch.zeros(self.args.number_components, 1).squeeze().cuda()
+        ones = torch.ones(self.args.number_components).squeeze().cuda()
+        for d in range(dg+1):
+            mask = (yhat_means == d)
+            pis = self.mixingw(self.idle_input).squeeze()
+            pis_select = torch.masked_select(pis, mask)
+            sm = pis_select.sum()
+
+            # correct the mixing weights 
+            mixingw_c = mixingw_c + ones*(mask.float())/(sm*(dg+1))
+
+        self.mixingw_c = mixingw_c.data.cpu().numpy()
 
 
-
-    # AUXILIARY METHODS
     def calculate_loss(self, x, beta=1., average=False, head=0):
         '''
         :param x: input image(s)
@@ -131,8 +221,11 @@ class VAE(Model):
         :param average: whether to average loss or not
         :return: value of a loss function
         '''
+        
         # pass through VAE
-        x_mean, x_logvar, z_q, z_q_mean, z_q_logvar = self.forward(x, head=head)
+        fw_head = min(head, len(self.q_z_layers)-1)
+
+        x_mean, x_logvar, z_q, z_q_mean, z_q_logvar = self.forward(x, head=fw_head)
 
         # RE
         if self.args.input_type == 'binary':
@@ -236,7 +329,7 @@ class VAE(Model):
         return lower_bound
 
     # ADDITIONAL METHODS
-    def generate_x(self, N=25, head=0):
+    def generate_x(self, N=25, head=0, replay=False):
         if self.args.prior == 'standard':
             z_sample_rand = Variable( torch.FloatTensor(N, self.args.z1_size).normal_() )
             if self.args.cuda:
@@ -244,6 +337,8 @@ class VAE(Model):
 
             samples_rand, _ = self.p_x(z_sample_rand, head=head)
         elif self.args.prior == 'vampprior':
+            clsts = np.random.choice(range(self.Kmog), N, p=self.pis.data.cpu().numpy())
+
             means = self.means[head](self.idle_input)
             if self.args.dataset_name == 'celeba':
                 means = means.reshape(means.size(0), 3, 64, 64)
@@ -257,16 +352,38 @@ class VAE(Model):
             randperm = torch.randperm(samples_rand.size(0))
             samples_rand = samples_rand[randperm][:N]
 
-        elif self.args.prior == 'vampprior_joint':
-            means = self.means(self.idle_input)
+        elif self.args.prior == 'vampprior_short':
+            if self.args.use_vampmixingw:
+                pis = self.mixingw(self.idle_input).squeeze()
+            else:
+                pis = torch.ones(self.args.number_components) / self.args.number_components
+            
+            if self.args.use_mixingw_correction and replay:
+                pis = torch.from_numpy(self.mixingw_c).cuda() * pis
+
+            clsts = np.random.choice(range(self.args.number_components), N, 
+                                     p=pis.data.cpu().numpy())
+
+            if self.args.separate_means:
+                K = self.means[head].linear.weight.size(1)
+                eye = torch.eye(K, K).cuda()
+
+                means = self.means[0](eye)[clsts, :]
+            else: 
+                K = self.means.linear.weight.size(1)
+                eye = torch.eye(K, K).cuda()
+
+                means = self.means(eye)[clsts, :]
+
+            # if used in the separated means case, always use the first head. Therefore you need to merge the means before generation 
             z_sample_gen_mean, z_sample_gen_logvar = self.q_z_mean(means), self.q_z_logvar(means)
             z_sample_rand = self.reparameterize(z_sample_gen_mean, z_sample_gen_logvar)
             
             samples_rand, _ = self.p_x(z_sample_rand, head=head)
 
             # do a random permutation to see a more representative sampleset
-            randperm = torch.randperm(samples_rand.size(0))
-            samples_rand = samples_rand[randperm][:N]
+            #randperm = torch.randperm(samples_rand.size(0))
+            #samples_rand = samples_rand[randperm][:N]
         elif self.args.prior == 'GMM':
             if self.GMM.covariance_type == 'diag':
                 clsts = np.random.choice(range(self.Kmog), N, p=self.pis.data.cpu().numpy())
@@ -353,11 +470,20 @@ class VAE(Model):
 
             # calculte log-sum-exp
             log_prior = a_max + torch.log(torch.sum(torch.exp(a - a_max.unsqueeze(1)), 1))  # MB x 1
-        elif self.args.prior == 'vampprior_joint':
+        elif self.args.prior == 'vampprior_short':
             C = self.args.number_components
 
             # calculate params
-            X = self.means(self.idle_input)
+            if self.args.separate_means:
+                K = self.means[head].linear.weight.size(1)
+                eye = torch.eye(K, K).cuda()
+
+                X = self.means[head](eye)
+            else: 
+                K = self.means.linear.weight.size(1)
+                eye = torch.eye(K, K).cuda()
+
+                X = self.means(eye)
 
             z_p_mean = self.q_z_mean(X)
             z_p_logvar = self.q_z_logvar(X)
@@ -367,9 +493,15 @@ class VAE(Model):
             means = z_p_mean.unsqueeze(0)
             logvars = z_p_logvar.unsqueeze(0)
 
-            a = log_Normal_diag(z_expand, means, logvars, dim=2) - math.log(C)  # MB x C
-            a_max, _ = torch.max(a, 1)  # MB x 1
+            # havent yet implemented dealing with mixing weights in the separated means case
+            if self.args.use_vampmixingw:
+                pis = self.mixingw(eye).t()
+                eps = 1e-30
+                a = log_Normal_diag(z_expand, means, logvars, dim=2) + torch.log(pis)  # MB x C
+            else:
+                a = log_Normal_diag(z_expand, means, logvars, dim=2) - math.log(C)  # MB x C
 
+            a_max, _ = torch.max(a, 1)  # MB x 1
             # calculte log-sum-exp
             log_prior = a_max + torch.log(torch.sum(torch.exp(a - a_max.unsqueeze(1)), 1))  # MB x 1
 
@@ -384,7 +516,7 @@ class VAE(Model):
             else:
                 log_prior = log_mog_diag(z, self.mus, self.sigs, self.pis)
         else:
-            raise Exception('Wrong name of the prior!')
+            raise Exception('invalid prior!')
 
         return log_prior
 
@@ -460,13 +592,31 @@ class VAE(Model):
         self.args.prior = 'GMM'
 
 
+class classifier(nn.Module):
+    def __init__(self, args, K, L, Lclass=10):
+        super(classifier, self).__init__()
+        
+        self.K = K
+        self.L = L
+        self.args = args
+        
+        activation = nn.ReLU()
+        self.layer = nn.Sequential(
+            GatedDense(L, K, activation=activation),
+            GatedDense(K, Lclass, activation=None)
+        )
+
+    def forward(self, x):
+        out = self.layer(x)
+        return out
+
 class conv_vae(VAE):
     def __init__(self, args):
         super(conv_vae, self).__init__(args)
 
         # encoder: q(z | x)
         d = 32
-        act = F.relu
+        act = F.relu 
         self.q_z_layers = nn.Sequential(
             GatedConv2d(self.args.input_size[0], d, 4, 2, 1, activation=act),
             GatedConv2d(d, 2*d, 4, 2, 1, activation=act),

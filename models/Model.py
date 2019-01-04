@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 from utils.nn import normal_init, NonLinear
+import copy
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #=======================================================================================================================
@@ -20,12 +21,16 @@ class Model(nn.Module):
     # AUXILIARY METHODS
     def add_pseudoinputs(self, separate_means=True):
 
-        nonlinearity = nn.Hardtanh(min_val=0.0, max_val=1.0)
+        self.args.number_components = copy.deepcopy(self.args.number_components_init)
+        nonlinearity = None #nn.Hardtanh(min_val=0.0, max_val=1.0)
 
-        if separate_means == True:
-            self.means = NonLinear(self.args.number_components, np.prod(self.args.input_size), bias=False, activation=nonlinearity)
-        else:
-            self.means = NonLinear(self.args.number_components, 300, bias=False, activation=nonlinearity)
+        if self.args.prior == 'vampprior': 
+            self.means = NonLinear(self.args.number_components_init, np.prod(self.args.input_size), bias=False, activation=nonlinearity)
+        elif self.args.prior == 'vampprior_short':
+            self.means = NonLinear(self.args.number_components_init, 300, bias=False, activation=nonlinearity)
+
+        if self.args.use_vampmixingw:
+            self.mixingw = NonLinear(self.args.number_components_init, 1, bias=False, activation=nn.Softmax(dim=0))
 
 
         # init pseudo-inputs
@@ -34,11 +39,11 @@ class Model(nn.Module):
         else:
             normal_init(self.means.linear, self.args.pseudoinputs_mean, self.args.pseudoinputs_std)
 
-        if separate_means:
+        if self.args.separate_means:
             self.means = nn.ModuleList([self.means])
 
         # create an idle input for calling pseudo-inputs
-        self.idle_input = Variable(torch.eye(self.args.number_components, self.args.number_components), requires_grad=False)
+        self.idle_input = Variable(torch.eye(self.args.number_components_init, self.args.number_components_init), requires_grad=False)
         if self.args.cuda:
             self.idle_input = self.idle_input.cuda()
 
