@@ -206,7 +206,7 @@ for dg in range(0, 10):
 
     if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
         model.balance_mixingw(classifier, dg=dg)
-        if argument.use_visdom:
+        if arguments.use_visdom:
             vis.text(str(model.mixingw_c), win='mixingw')
 
                     
