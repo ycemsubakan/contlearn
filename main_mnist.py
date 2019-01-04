@@ -155,11 +155,7 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-<<<<<<< HEAD
 exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
-=======
-exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  + '_use_replaycostcorrection_' + str(args.use_replaycostcorrection) + arguments.notes
->>>>>>> a6618c069a851097d3a16293e1f3e02409b5fb42
 results_name = arguments.dataset_name + '_' + exp_details
 
 model = VAE(arguments).cuda()
@@ -193,7 +189,7 @@ for dg in range(0, 10):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if 1 & os.path.exists(model_path):
+    if 0 & os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))

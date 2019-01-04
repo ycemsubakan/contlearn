@@ -331,13 +331,13 @@ def train_vae(epoch, args, train_loader, model,
             loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=0)
 
             if args.use_replaycostcorrection:
-                loss = dg*loss1 + loss2
+                loss = (dg)*loss1 + loss2
             else:
                 loss = loss1 + loss2
 
             RE = RE1 + RE2
             KL = KL1 + KL2 
-        elif (args.separate_means == False) and (dg == 0) and (args.replay_size == 'increase'):
+        elif (args.separate_means == False) and (dg == 0):
             loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
         
         if (args.replay_type == 'prototype') and (dg > 0):
