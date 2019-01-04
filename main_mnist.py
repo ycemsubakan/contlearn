@@ -87,14 +87,16 @@ parser.add_argument('--dynamic_binarization', action='store_true', default=False
 
 # replay parameters
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
+
 parser.add_argument('--replay_type', type=str, default='replay', help='replay, prototype') 
+
 
 parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
 
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--restart_means', type=int, default=0, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=1, help='whether or not to use a classifier to balance the classes, in {0, 1}')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=1, help='whether or not to use a constant for replay cost correction, {0, 1}')
 
@@ -153,7 +155,7 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  + '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
+exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  + '_use_replaycostcorrection_' + str(args.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
 
 model = VAE(arguments).cuda()
