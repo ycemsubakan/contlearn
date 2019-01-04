@@ -338,7 +338,7 @@ def train_vae(epoch, args, train_loader, model,
 
             RE = RE1 + RE2
             KL = KL1 + KL2 
-        elif (args.separate_means == False) and (dg == 0):
+        elif ( (args.separate_means == False) and (dg == 0) ) or (args.replay_size == 'increase'):
             loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
         
         if (args.replay_type == 'prototype') and (dg > 0):

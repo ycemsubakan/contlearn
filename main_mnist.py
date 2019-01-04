@@ -189,7 +189,7 @@ for dg in range(0, 10):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if 0 & os.path.exists(model_path):
+    if 1 & os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
@@ -202,7 +202,7 @@ for dg in range(0, 10):
                           optimizer, dr, arguments.model_name, prev_model=prev_model, 
                           dg=dg) 
 
-    if arguments.use_classifier and arguments.use_mixingw_correction:
+    if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
         model.balance_mixingw(classifier, dg=dg)
         vis.text(str(model.mixingw_c), win='mixingw')
 
@@ -212,7 +212,7 @@ for dg in range(0, 10):
     print('evaluating the model...')
 
     # when doing the hyperparameter search, pay attention to what results you are saving
-    if 1: 
+    if 0: 
         try:
             temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
             all_results.append(temp[dg])
@@ -243,7 +243,7 @@ for dg in range(0, 10):
     #                         arguments.input_size[2]), win='means1', opts=opts)
 
     # little questionable 
-    if arguments.add_cap and (dg < 9):
+    if arguments.add_cap and (dg < 9) and (prior != 'standard'):
         model.add_latent_cap(dg)
     else:
         model.restart_latent_space()
