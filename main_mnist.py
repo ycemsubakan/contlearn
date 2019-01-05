@@ -21,7 +21,7 @@ assert vis.check_connection()
 
 parser = argparse.ArgumentParser(description='Multitask experiments')
 
-parser.add_argument('--use_visdom', type=int, default=1, 
+parser.add_argument('--use_visdom', type=int, default=0, 
                     help='use/not use visdom, {0, 1}')
 parser.add_argument('--batch_size', type=int, default=100, metavar='BStrain',
                     help='input batch size for training (default: 100)')
@@ -91,8 +91,6 @@ parser.add_argument('--dynamic_binarization', action='store_true', default=False
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
 
 parser.add_argument('--replay_type', type=str, default='replay', help='replay, prototype') 
-
-
 parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
 
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
@@ -105,6 +103,10 @@ parser.add_argument('--use_replaycostcorrection', type=int, default=1, help='whe
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
 
 # things to add: balancing via classifier, adding constants to the loss function for replay balancing
+# goals: primarily trying to show the benefits of replay balancing 
+# dataset ideas: sketches, mnist combinations, celeba, permutations on mnist order 
+# continually training without replay
+# 
 
 
 arguments = parser.parse_args()
