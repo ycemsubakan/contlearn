@@ -212,6 +212,7 @@ class VAE(Model):
             mixingw_c = mixingw_c + ones*(mask.float())/(sm*(dg+1))
 
         self.mixingw_c = mixingw_c.data.cpu().numpy()
+        return yhat_means
 
 
     def calculate_loss(self, x, beta=1., average=False, head=0):

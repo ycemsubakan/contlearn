@@ -6,12 +6,17 @@ import matplotlib.pyplot as plt
 import os
 import copy
 
-path = 'select_files/'
+path = 'select_files2/'
 files = os.listdir(path)
 
+#filesf = []
+#for i, fl in enumerate(files):
+#    if 'db_1' not in fl:
+#        filesf.append(fl)
+
 test_lls = []
-colors = 'rbmkycgrbm'
-markers = 'oxv^oxv^oxv^'
+colors = 'rbmkycgrbmrbmkycgrbm'
+markers = 'oxv^oxv^oxv^oxv^'
 
 legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 
@@ -22,22 +27,22 @@ for i, fl in enumerate(files):
     test_cls = [res['class'] for res in results]
 
     lbl = copy.deepcopy(fl)
-    lbl = lbl.replace('K500_wu100_z1_40_z2_40', ' ').replace('replay_size', ' ').replace('add_cap_0_usevampmixingw_1_separate_means_0_useclassifier_1', ' ').replace('dynamic_mnist_vae', ' ')
-    plt.subplot(121)
+    lbl = lbl.replace('_wu100_z1_40_z2_40', ' ').replace('replay_size', ' ').replace('add_cap_0_usevampmixingw_1_separate_means_0_useclassifier_1', ' ').replace('dynamic_mnist_vae', ' ')
+    #plt.subplot(121)
     plt.plot(np.arange(len(test_lls)), test_lls, '-' + colors[i] + markers[i], label=lbl)
 
-    plt.subplot(122)
-    plt.plot(np.arange(len(test_cls)), test_cls, '-' + colors[i] + markers[i], label=lbl)
+    #plt.subplot(122)
+    #plt.plot(np.arange(len(test_cls)), test_cls, '-' + colors[i] + markers[i], label=lbl)
 
 
-plt.subplot(121)
+#plt.subplot(121)
 plt.xlabel('task id (mnist digit)')
 plt.ylabel('Test Average Negative LogLikelihood')
 
 plt.xticks(range(10), range(10))
 plt.legend()
 
-plt.subplot(122)
+#plt.subplot(122)
 plt.xlabel('task id (mnist digit)')
 plt.ylabel('Test Average Classification Accuracy')
 

@@ -113,7 +113,12 @@ if not os.path.exists(results_path):
 
 # LOAD DATA
 print('load data')
-train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+#train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+train_loader = ut.get_mnist_loaders(list(range(10)), 'train', arguments)
+val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments)
+test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments)
+
+arguments.dynamic_binarization = False
 
 from models.VAE import VAE
 

@@ -9,6 +9,7 @@ import copy
 import os
 import utilities as ut
 import pickle
+import time
 
 from utils.optimizer import AdamNormGrad
 import utils.evaluation as ev
@@ -34,7 +35,7 @@ parser.add_argument('--lr', type=float, default=0.0005, metavar='LR',
 parser.add_argument('--early_stopping_epochs', type=int, default=50, metavar='ES',
                     help='number of epochs for early stopping')
 parser.add_argument('--warmup', type=int, default=100, metavar='WU',
-                    help='number of epochs for warmu-up')
+                    help='number of epochs for warm-up')
 
 # cuda
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -53,9 +54,9 @@ parser.add_argument('--input_size', type=int, default=[1, 28, 28], metavar='D',
 parser.add_argument('--activation', type=str, default=None, metavar='ACT',
                     help='activation function')
 
-parser.add_argument('--number_components', type=int, default=500, metavar='NC',
+parser.add_argument('--number_components', type=int, default=50, metavar='NC',
                     help='number of pseudo-inputs')
-parser.add_argument('--number_components_init', type=int, default=500, metavar='NC',
+parser.add_argument('--number_components_init', type=int, default=50, metavar='NC',
                     help='number of pseudo-inputs initial number')
 
 parser.add_argument('--pseudoinputs_mean', type=float, default=-0.05, metavar='PM',
@@ -84,8 +85,8 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
                     help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
-parser.add_argument('--dynamic_binarization', action='store_true', default=False,
-                    help='allow dynamic binarization')
+parser.add_argument('--dynamic_binarization', type=int, default=0,
+                    help='allow dynamic binarization, {0, 1}')
 
 # replay parameters
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
@@ -106,8 +107,8 @@ parser.add_argument('--notes', type=str, default='', help='comments on the exper
 # goals: primarily trying to show the benefits of replay balancing 
 # dataset ideas: sketches, mnist combinations, celeba, permutations on mnist order 
 # continually training without replay
-# 
 
+# for mnist, need to repeat the experiments with bernoulli cost  
 
 arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
@@ -159,7 +160,7 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-exp_details = arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
+exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
 
 model = VAE(arguments).cuda()
@@ -202,14 +203,17 @@ for dg in range(0, 10):
         print('training model... for digit {}'.format(dg))
         optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
         model = model.cuda()
+        t1 = time.time()
         tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                           optimizer, dr, arguments.model_name, prev_model=prev_model, 
                           dg=dg) 
+        t2 = time.time()
 
     if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
-        model.balance_mixingw(classifier, dg=dg)
+        yhat_means = model.balance_mixingw(classifier, dg=dg)
         if arguments.use_visdom:
             vis.text(str(model.mixingw_c), win='mixingw')
+            vis.text(str(yhat_means), win='yhat_means')
 
                     
     if (dg > 0) and arguments.separate_means:
@@ -225,6 +229,7 @@ for dg in range(0, 10):
             results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
             results['digit'] = dg
             results['class'] = acc.item()
+            results['time'] = t2 - t1
             all_results.append(results)
             pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
     
@@ -248,7 +253,7 @@ for dg in range(0, 10):
     #                         arguments.input_size[2]), win='means1', opts=opts)
 
     # little questionable 
-    if arguments.add_cap and (dg < 9) and (prior != 'standard'):
+    if arguments.add_cap and (dg < 9) and (arguments.prior != 'standard'):
         model.add_latent_cap(dg)
     else:
         model.restart_latent_space()

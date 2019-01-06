@@ -251,7 +251,7 @@ def train_classifier(args, train_loader,
                 yhat_prev = classifier.forward(x_gen)
                 loss_cls_prev = cent(yhat_prev, prev_targets)
 
-                if args.use_replaycostcorrection:
+                if args.use_replaycostcorrection and (args.replay_size == 'constant'):
                     loss_cls = loss_cls + dg*loss_cls_prev
                 else:
                     loss_cls = loss_cls + loss_cls_prev
@@ -305,7 +305,7 @@ def train_vae(epoch, args, train_loader, model,
                 print('replay size {}'.format(x_replay.size(0)))
             
             if args.replay_size == 'increase': 
-                data = torch.cat([data, x_replay], dim=0)
+                data = torch.cat([data, x_replay.data], dim=0)
 
 
         
