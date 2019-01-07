@@ -196,14 +196,19 @@ class VAE(Model):
 
         return recons 
 
-    def balance_mixingw(self, classifier, dg, vis=None):
+    def balance_mixingw(self, classifier, dg, perm=torch.arange(10), vis=None):
+        # functions that are related: 
+        # training.train_classifier
+        # evaluate.
+
         means = self.reconstruct_means()
         yhat_means = torch.argmax(classifier.forward(means), dim=1)
 
         mixingw_c = torch.zeros(self.args.number_components, 1).squeeze().cuda()
         ones = torch.ones(self.args.number_components).squeeze().cuda()
-        for d in range(dg+1):
-            mask = (yhat_means == d)
+
+        for d in perm[:(dg+1)]:
+            mask = (yhat_means == int(d.item()))
             pis = self.mixingw(self.idle_input).squeeze()
             pis_select = torch.masked_select(pis, mask)
             sm = pis_select.sum()

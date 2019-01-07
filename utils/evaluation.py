@@ -311,6 +311,12 @@ def evaluate_classifier(args, classifier, data_loader):
     all_preds_cat = torch.argmax(torch.cat(all_preds, dim=0), dim=1)
     all_lbls_cat = torch.cat(all_lbls, dim=0)
 
+    # label at task t  =  perm[t]   
+    # example : perm = [3 0 1 4 2], label_0 = 3, label_1 = 0, label_2 = 1, label_3 = 4, label_4 = 2
+
+    # forward map: 0 -> 3, 1 -> 0, 2 -> 1, 3 -> 4, 4-> 2
+    # backward map: 0 -> 1, 1->2, 2->4, 3->0, 4->3
+
     acc = (all_preds_cat == all_lbls_cat).float().mean()
     return acc, all_preds_cat
 

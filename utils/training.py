@@ -123,7 +123,7 @@ def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader,
 
 def experiment_vae(arguments, train_loader, val_loader, test_loader, 
                    model, optimizer, dr, model_name='vae', prev_model=None, 
-                   classifier=None, prev_classifier=None, optimizer_cls=None, dg=0):
+                   classifier=None, prev_classifier=None, optimizer_cls=None, perm=torch.arange(10), dg=0):
     from utils.evaluation import evaluate_vae as evaluate
     from utils.helpers import print_and_log_scalar
 
@@ -147,7 +147,7 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         time_start = time.time()
         #if prev_model == None:
         model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, 
-        arguments, train_loader, model, optimizer, classifier=classifier, prev_classifier=prev_classifier, prev_model=prev_model, optimizer_cls=optimizer_cls, dg=dg)
+        arguments, train_loader, model, optimizer, classifier=classifier, prev_classifier=prev_classifier, prev_model=prev_model, optimizer_cls=optimizer_cls, perm=perm, dg=dg)
 
         # merge the means for evaluation and sampling
         if (dg > 0) and arguments.separate_means: 
@@ -216,9 +216,11 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         # NaN
         if math.isnan(val_loss_epoch):
             break
+    
+    return epoch
 
 
-def train_classifier(args, train_loader,  
+def train_classifier(args, train_loader, perm=torch.arange(10),
                      classifier=None, prev_classifier=None, prev_model=None, 
                      optimizer_cls=None, dg=0):
 
@@ -238,7 +240,7 @@ def train_classifier(args, train_loader,
             yhat = classifier.forward(data)
             cent = nn.CrossEntropyLoss()
 
-            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(dg).cuda()
+            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg]).cuda()
             loss_cls = cent(yhat, targets)
 
             if dg > 0: 
@@ -268,7 +270,7 @@ def train_classifier(args, train_loader,
 
 def train_vae(epoch, args, train_loader, model, 
               optimizer, classifier=None, prev_classifier=None, prev_model=None, 
-              optimizer_cls=None, dg=0):
+              optimizer_cls=None, perm=torch.arange(10), dg=0):
 
     # set loss to 0
     train_loss = 0

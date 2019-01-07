@@ -85,6 +85,8 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
                     help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+parser.add_argument('--permindex', type=int, default=1, 
+                    help='permutation index, integer in [0, 1000)' )
 parser.add_argument('--dynamic_binarization', type=int, default=0,
                     help='allow dynamic binarization, {0, 1}')
 
@@ -160,8 +162,12 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
+exp_details = 'permutation_' + str(arguments.permindex) + '_db_' + str(arguments.dynamic_binarization) + '_' + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_' + str(arguments.replay_size) + '_replaytype_' + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
+
+# load the permutations
+permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+perm = permutations[arguments.permindex]
 
 model = VAE(arguments).cuda()
 if arguments.use_classifier:
@@ -171,9 +177,9 @@ else:
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, 10):
-    train_loader = ut.get_mnist_loaders([dg], 'train', arguments)
-    val_loader = ut.get_mnist_loaders(list(range(dg+1)), 'validation', arguments)
-    test_loader = ut.get_mnist_loaders(list(range(dg+1)), 'test', arguments)
+    train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments)
+    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments)
+    test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments)
 
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
@@ -189,7 +195,7 @@ for dg in range(0, 10):
         tr.train_classifier(arguments, train_loader, classifier=classifier, 
                             prev_classifier=prev_classifier,
                             prev_model=prev_model,
-                            optimizer_cls=optimizer_cls, dg=dg)
+                            optimizer_cls=optimizer_cls, dg=dg, perm=perm)
 
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
@@ -204,13 +210,14 @@ for dg in range(0, 10):
         optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
         model = model.cuda()
         t1 = time.time()
-        tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
-                          optimizer, dr, arguments.model_name, prev_model=prev_model, 
-                          dg=dg) 
+        EPconv = tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
+                                   optimizer, dr, arguments.model_name, prev_model=prev_model, 
+                                   dg=dg, perm=perm) 
         t2 = time.time()
+        # also add number of iterations here 
 
     if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
-        yhat_means = model.balance_mixingw(classifier, dg=dg)
+        yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
         if arguments.use_visdom:
             vis.text(str(model.mixingw_c), win='mixingw')
             vis.text(str(yhat_means), win='yhat_means')
@@ -222,16 +229,17 @@ for dg in range(0, 10):
 
     # when doing the hyperparameter search, pay attention to what results you are saving
     if 1: 
-        try:
-            temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
-            all_results.append(temp[dg])
-        except:
-            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
-            results['digit'] = dg
-            results['class'] = acc.item()
-            results['time'] = t2 - t1
-            all_results.append(results)
-            pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        #try:
+        #    temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
+        #    all_results.append(temp[dg])
+        #except:
+        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
+        results['digit'] = dg
+        results['class'] = acc.item()
+        results['time'] = t2 - t1
+        results['epochs'] = EPconv
+        all_results.append(results)
+        pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
     
     if arguments.replay_type == 'replay': 
         prev_model = copy.deepcopy(model)
@@ -257,37 +265,4 @@ for dg in range(0, 10):
         model.add_latent_cap(dg)
     else:
         model.restart_latent_space()
-
-    #opts={}
-    #opts['title'] = 'means2'
-
-    ##model.merge_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means2', opts=opts)
-
-    #opts={}
-    #opts['title'] = 'means3'
-
-    ##model.merge_latent()
-    #means = model.reconstruct_means(head=1)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means3', opts=opts)
-
-
-    #opts['title'] = 'means3'
-    #model.separate_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means3', opts=opts)
-
-
-    #opts['title'] = 'means4'
-    #model.merge_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means4', opts=opts)
-
-
-    #pdb.set_trace()
 
