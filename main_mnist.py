@@ -69,7 +69,7 @@ parser.add_argument('--use_training_data_init', action='store_true', default=Fal
 # model: model name, prior
 parser.add_argument('--model_name', type=str, default='vae', metavar='MN',
                     help='model name: vae, hvae_2level, convhvae_2level, pixelhvae_2level')
-parser.add_argument('--prior', type=str, default='vampprior', metavar='P',
+parser.add_argument('--prior', type=str, default='vampprior_short', metavar='P',
                     help='prior: standard, vampprior, vampprior_short')
 parser.add_argument('--cov_type', type=str, default='diag', metavar='P',
                     help='cov_type: diag, full')
@@ -85,6 +85,7 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
                     help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+parser.add_argument('--num_classes', type=int, default=10, help='number of classes')
 parser.add_argument('--dynamic_binarization', type=int, default=0,
                     help='allow dynamic binarization, {0, 1}')
 
@@ -97,11 +98,13 @@ parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--use_classifier', type=int, default=1, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--semi_sup', type=int, default=1, help='wheter or not to do semi-supervised learning')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=1, help='whether or not to use a constant for replay cost correction, {0, 1}')
 
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
+
 
 # things to add: balancing via classifier, adding constants to the loss function for replay balancing
 # goals: primarily trying to show the benefits of replay balancing 
@@ -113,6 +116,8 @@ parser.add_argument('--notes', type=str, default='', help='comments on the exper
 arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
+
+assert arguments.semi_sup + arguments.use_classifier < 2
 
 torch.manual_seed(arguments.seed)
 if arguments.cuda:
@@ -143,10 +148,13 @@ if not os.path.exists('mnist_files'):
 
 # importing model
 if arguments.model_name == 'vae':
-    if arguments.dataset_name == 'celeba':
-        from models.VAE import conv_vae as VAE
+    if arguments.semi_sup:
+        from models.SSVAE import SSVAE as VAE
     else:
-        from models.VAE import VAE
+        if arguments.dataset_name == 'celeba':
+            from models.VAE import conv_vae as VAE
+        else:
+            from models.VAE import VAE
 elif arguments.model_name == 'hvae_2level':
     from models.HVAE_2level import VAE
 elif arguments.model_name == 'convhvae_2level':
@@ -160,7 +168,7 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
+exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_semi_sup_' +str(arguments.semi_sup) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
 
 model = VAE(arguments).cuda()

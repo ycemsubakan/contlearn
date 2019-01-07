@@ -300,8 +300,12 @@ def train_vae(epoch, args, train_loader, model,
                 cst = 1 
             else:
                 cst = copy.deepcopy(dg)
-            x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
-            if epoch % 10 == 0:
+            # generate replay data:
+            if args.semi_sup:
+                x_replay, y_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+            else:    
+                x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+            if epoch % args.num_classes == 0:
                 print('replay size {}'.format(x_replay.size(0)))
             
             if args.replay_size == 'increase': 
@@ -322,8 +326,9 @@ def train_vae(epoch, args, train_loader, model,
         
         # loss evaluation (forward pass)
         if args.separate_means and (dg > 0) and (args.replay_size == 'constant'):
-            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
-            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=1)
+            
+            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
+            loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=1)
 
             loss = loss1 + loss2
             RE = RE1 + RE2
@@ -340,10 +345,10 @@ def train_vae(epoch, args, train_loader, model,
             RE = RE1 + RE2
             KL = KL1 + KL2 
         elif ( (args.separate_means == False) and (dg == 0) ) or (args.replay_size == 'increase'):
-            loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
+            loss, RE, KL, _ = model.calculate_loss(x, beta=beta, average=True)
         
         if (args.replay_type == 'prototype') and (dg > 0):
-            loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta, average=True)
+            loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
         
         if batch_idx % 300 == 0:
