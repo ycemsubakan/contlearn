@@ -16,7 +16,7 @@ import copy
 
 vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
                     use_incoming_socket=False)
-assert vis.check_connection()
+#assert vis.check_connection()
 
 
 def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader, 

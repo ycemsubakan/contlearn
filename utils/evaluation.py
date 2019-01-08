@@ -183,9 +183,12 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
         data, target = Variable(data, volatile=True), Variable(target)
 
-        if args.dataset_name == 'patch_celeba':
-            data = data.reshape(-1, int(np.prod(args.input_size)))
+        #if args.dataset_name == 'patch_celeba':
+        #    data = data.reshape(-1, int(np.prod(args.input_size)))
 
+        # to avoid the singleton case (otherwise it breaks the code)
+        if data.size(0) == 1:
+            data = torch.cat([data, data], dim=0)
         x = data
 
         # calculate loss function

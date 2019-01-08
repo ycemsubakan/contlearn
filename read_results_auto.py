@@ -6,10 +6,32 @@ import matplotlib.pyplot as plt
 import os
 import copy
 
-path = 'select_files2/'
+path = 'select_files3/'
 files = os.listdir(path)
 
-#filesf = []
+filesf = []
+priors = ['vampprior_short', 'standard']
+replays = ['replay_size_increase', 'replay_size_constant']
+mixingw_cor = ['use_mixingw_correction_0', 'use_mixingw_correction_1']
+
+models = [] 
+
+i = 0
+for pr in priors:
+    for rp in replays:
+        for mc in mixingw_cor:
+            models.append([])
+            for fl in files:
+                if (pr in fl) and (rp in fl) and (mc in fl):
+                    models[i].append(fl)    
+            
+            # deal with non-existing combinations
+            if len(models[i]) == 0:
+                models.pop()    
+            else: 
+                i = i +  1
+
+
 #for i, fl in enumerate(files):
 #    if 'db_1' not in fl:
 #        filesf.append(fl)
@@ -21,18 +43,33 @@ markers = 'oxv^oxv^oxv^oxv^'
 legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 
 plt.figure(figsize=[20, 10], dpi=100)
-for i, fl in enumerate(files):
-    results = pickle.load(open(path + fl, 'rb'))
-    test_lls = [res['test_ll'] for res in results]
-    test_cls = [res['class'] for res in results]
+T = 10
+for i, mdl in enumerate(models): 
+    test_lls = []
+
+    NC = 0
+    for fl in mdl:
+        results = pickle.load(open(path + fl, 'rb'))
+        temp1 = [res['test_ll'] for res in results]
+        if (len(temp1) == T) and 'permutation_0' in fl:
+            test_lls.append(temp1)
+            NC = NC + 1
+    test_lls = np.array(test_lls)
+
+    #test_cls = [res['class'] for res in results]
 
     lbl = copy.deepcopy(fl)
     lbl = lbl.replace('_wu100_z1_40_z2_40', ' ').replace('replay_size', ' ').replace('add_cap_0_usevampmixingw_1_separate_means_0_useclassifier_1', ' ').replace('dynamic_mnist_vae', ' ')
-    #plt.subplot(121)
-    plt.plot(np.arange(len(test_lls)), test_lls, '-' + colors[i] + markers[i], label=lbl)
+    plt.plot(np.arange(T), test_lls.mean(0), '-' + colors[i] + markers[i], label=lbl + 'NC' + str(NC))
+    parts = plt.violinplot(positions=np.arange(T) + (0.1*i) , dataset=test_lls, widths=0.1)
 
-    #plt.subplot(122)
-    #plt.plot(np.arange(len(test_cls)), test_cls, '-' + colors[i] + markers[i], label=lbl)
+    for pc in parts['bodies']:
+        pc.set_facecolor(colors[i])
+        pc.set_edgecolor(colors[i])
+        #pc.set_alpha(1)
+
+        #plt.subplot(122)
+        #plt.plot(np.arange(len(test_cls)), test_cls, '-' + colors[i] + markers[i], label=lbl)
 
 
 #plt.subplot(121)
@@ -49,4 +86,4 @@ plt.ylabel('Test Average Classification Accuracy')
 plt.xticks(range(10), range(10))
 
 plt.show()
-#plt.savefig('Figure_contlearn.png')
+    #plt.savefig('Figure_contlearn.png')

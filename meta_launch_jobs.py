@@ -19,7 +19,7 @@ VAMP_MIX = [1]
 DYNAMIC_BINARIZATION = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(0, 5)
+    PERM_RANGE = range(10, 15)
 else: 
     PERM_RANGE = range(5, 10)
 
@@ -38,24 +38,32 @@ for prior in PRIORS:
         for rebalance in REBALANCES:  
             for db in DYNAMIC_BINARIZATION:
                 for permid in PERM_RANGE:
-                    command = "main_mnist.py \
-                    --prior %(prior)s \
-                    --replay_size %(replay)s \
-                    --add_cap %(add_cap)s \
-                    --use_vampmixingw %(vamp_mix)s \
-                    --use_mixingw_correction %(rebalance)s \
-                    --dynamic_binarization %(db)s \
-                    --permindex %(permid)s" % locals()
-            
-                    print(command)
-            
-                    if host == 'cedar':
-                        command = "{} cc_launch_cl.sh {}".format(sys.argv[1], command) 
-                    else:
-                        command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
 
-                    os.system(command)
-                    time.sleep(2)
+                    if (prior == 'vampprior_short') and replay == 'constant':
+                        COSTC = [0, 1]
+                    else: 
+                        COSTC = [1]
+
+                    for costc in COSTC:
+                        command = "main_mnist.py \
+                        --prior %(prior)s \
+                        --replay_size %(replay)s \
+                        --add_cap %(add_cap)s \
+                        --use_vampmixingw %(vamp_mix)s \
+                        --use_mixingw_correction %(rebalance)s \
+                        --dynamic_binarization %(db)s \
+                        --permindex %(permid)s \
+                        --use_replaycostcorrection %(costc)s" % locals()
+                
+                        print(command)
+                
+                        if host == 'cedar':
+                            command = "{} cc_launch_cl.sh {}".format(sys.argv[1], command) 
+                        else:
+                            command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
+
+                        os.system(command)
+                        time.sleep(2)
 
 
 
