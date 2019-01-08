@@ -146,8 +146,10 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
     for epoch in range(1, arguments.epochs + 1):
         time_start = time.time()
         #if prev_model == None:
-        model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, 
-        arguments, train_loader, model, optimizer, classifier=classifier, prev_classifier=prev_classifier, prev_model=prev_model, optimizer_cls=optimizer_cls, dg=dg)
+        model, train_results = train_vae(epoch, 
+                        arguments, train_loader, model, optimizer, classifier=classifier, 
+                        prev_classifier=prev_classifier, prev_model=prev_model, 
+                        optimizer_cls=optimizer_cls, dg=dg)
 
         # merge the means for evaluation and sampling
         if (dg > 0) and arguments.separate_means: 
@@ -274,7 +276,8 @@ def train_vae(epoch, args, train_loader, model,
     train_loss = 0
     train_re = 0
     train_kl = 0
-    # set model in training mode
+    if args.semi_sup: train_ce = 0
+
     model.train()
 
     # start training
@@ -310,7 +313,9 @@ def train_vae(epoch, args, train_loader, model,
             
             if args.replay_size == 'increase': 
                 data = torch.cat([data, x_replay.data], dim=0)
-
+                if args.semi_sup:
+                    pdb.set_trace()
+                    target = torch.cat([target, y_replay], dim=0)
 
         
         #if len(data.shape) > 2:
@@ -326,7 +331,10 @@ def train_vae(epoch, args, train_loader, model,
         
         # loss evaluation (forward pass)
         if args.separate_means and (dg > 0) and (args.replay_size == 'constant'):
-            
+           
+            if args.semi_sup:
+                raise Exception('not implmented yet!')
+ 
             loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
             loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=1)
 
@@ -334,20 +342,41 @@ def train_vae(epoch, args, train_loader, model,
             RE = RE1 + RE2
             KL = KL1 + KL2 
         elif (args.separate_means == False) and (dg > 0) and (args.replay_size == 'constant'):
-            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
-            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=0)
+            if args.semi_sup:
+                loss1, RE1, KL1, CE1, _ = model.calculate_loss(x_replay, y_replay, beta=beta, average=True, head=0)
+                loss2, RE2, KL2, CE2, _ = model.calculate_loss(x, target, beta=beta, average=True, head=0)
 
-            if args.use_replaycostcorrection:
-                loss = (dg)*loss1 + loss2
+                if args.use_replaycostcorrection:
+                    loss = (dg)*loss1 + loss2
+                else:
+                    loss = loss1 + loss2
+
+                RE = RE1 + RE2
+                KL = KL1 + KL2 
+                CE = CE1 + CE2
             else:
-                loss = loss1 + loss2
+                loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
+                loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=0)
 
-            RE = RE1 + RE2
-            KL = KL1 + KL2 
+                if args.use_replaycostcorrection:
+                    loss = (dg)*loss1 + loss2
+                else:
+                    loss = loss1 + loss2
+
+                RE = RE1 + RE2
+                KL = KL1 + KL2 
         elif ( (args.separate_means == False) and (dg == 0) ) or (args.replay_size == 'increase'):
-            loss, RE, KL, _ = model.calculate_loss(x, beta=beta, average=True)
+            
+            if args.semi_sup:
+                loss, RE, KL, CE, _ = model.calculate_loss(x, target, beta=beta, average=True)
+            else:    
+                loss, RE, KL, _ = model.calculate_loss(x, beta=beta, average=True)
         
         if (args.replay_type == 'prototype') and (dg > 0):
+            
+            if args.semi_sup:
+                raise Exception('not implemented yet!')
+            
             loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
         
@@ -367,13 +396,24 @@ def train_vae(epoch, args, train_loader, model,
         train_loss += loss.item()
         train_re += -RE.item()
         train_kl += KL.item()
+        if args.semi_sup: train_ce += CE.item()
 
     # calculate final loss
     train_loss /= len(train_loader)  # loss function already averages over batch size
     train_re /= len(train_loader)  # re already averages over batch size
     train_kl /= len(train_loader)  # kl already averages over batch size
-
-    return model, train_loss, train_re, train_kl
+    
+    train_results = {}
+    train_results['train_loss'] = train_loss
+    train_results['train_re']   = train_re
+    train_results['train_kl']   = train_kl
+    train_results['train_kl']   = train_kl
+    
+    if args.semi_sup:
+        train_ce /= len(train_loader)
+        train_results['train_ce'] = train_ce
+         
+    return model, train_results
 
 def train_vae_multihead(epoch, args, train_loader, model, optimizer, prev_model):
     # set loss to 0

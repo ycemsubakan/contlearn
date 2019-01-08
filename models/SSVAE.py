@@ -63,7 +63,8 @@ class SSVAE(Model):
 
         self.semi_supervisor = nn.Sequential(Linear(args.z1_size, args.num_classes), 
                                                  nn.Softmax())
-
+        self.criterion = nn.CrossEntropyLoss()
+        
         # weights initialization
         for m in self.modules():
             if isinstance(m, nn.Linear):
@@ -182,7 +183,7 @@ class SSVAE(Model):
         return yhat_means
 
 
-    def calculate_loss(self, x, y=None, beta=1., average=False):
+    def calculate_loss(self, x, y, beta=1., average=False, head=None):
         '''
         :param x: input image(s)
         :param beta: a hyperparam for warmup
@@ -209,16 +210,25 @@ class SSVAE(Model):
         log_q_z = log_Normal_diag(z_q, z_q_mean, z_q_logvar, dim=1)
         KL = -(log_p_z - log_q_z)
 
-        loss = - RE + beta * KL
+        # CE
+        CE = self.criterion(y_hat, y)
+
+        # total loss
+        loss = - RE + beta * KL + self.args.Lambda * CE
 
         if average:
             loss = torch.mean(loss)
             RE = torch.mean(RE)
             KL = torch.mean(KL)
+            CE = torch.mean(CE)
 
-        return loss, RE, KL, x_mean
+        return loss, RE, KL, CE, x_mean
 
     def calculate_likelihood(self, X, dir, mode='test', S=5000, MB=100):
+
+        # havent touched yet:
+        pdb.set_trace()
+        
         # set auxiliary variables for number of training and test sets
         N_test = X.size(0)
 
@@ -342,11 +352,10 @@ class SSVAE(Model):
             #randperm = torch.randperm(samples_rand.size(0))
             #samples_rand = samples_rand[randperm][:N]
 
-        pdb.set_trace()    
-        if self.args.semi_sup:
-            return samples_rand, y_rand
-        else:
-            return samples_rand
+        # generate soft labels:
+        y_rand = self.semi_supervisor(z_sample_rand) 
+
+        return samples_rand, y_rand
 
     def reconstruct_x(self, x):
         x_mean, _, _, _, _ = self.forward(x)
