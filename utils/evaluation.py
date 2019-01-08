@@ -169,11 +169,13 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
                  prev_model=None):
+    
     # set loss to 0
     evaluate_loss = 0
     evaluate_re = 0
     evaluate_kl = 0
-    # set model to evaluation mode
+    if args.semi_sup: evaluate_ce = 0
+    
     model.eval()
 
     # evaluate
@@ -189,19 +191,24 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         x = data
 
         # calculate loss function
-        loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0)
+        if args.semi_sup:
+            loss, RE, KL, CE, _ = model.calculate_loss(x.reshape(x.size(0), -1), target, average=True)
+        else:
+            loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0)
 
         evaluate_loss += loss.data[0] 
         evaluate_re += -RE.data[0] 
-
         evaluate_kl += KL.data[0]
+        if args.semi_sup: evaluate_ce += CE.data[0]
 
-        
     if mode == 'test':
         # load all data
         # grab the test data by iterating over the loader
         # there is no standardized tensor_dataset member across pytorch datasets
         
+        if args.semi_sup:
+            pdb.set_trace()
+    
         test_data, test_target = [], []
         for data, lbls in data_loader:
             test_data.append(data)
@@ -282,18 +289,22 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
     evaluate_loss /= len(data_loader)  # loss function already averages over batch size
     evaluate_re /= len(data_loader)  # re already averages over batch size
     evaluate_kl /= len(data_loader)  # kl already averages over batch size
+    if args.semi_sup: evaluate_ce /= len(data_loader)  # ce already averages over batch size
+    
+    output = {'test_loss': evaluate_loss.item(), 
+                'test_re' : evaluate_re.item(),
+                'test_kl' : evaluate_kl.item()}
+    
+    if args.semi_sup:
+        output['test_ce'] = evaluate_ce.item()
+        
     if mode == 'test':
-        return {'test_loss': evaluate_loss.item(), 
-                'test_re' : evaluate_re.item(),
-                'test_kl': evaluate_kl.item(), 
-                'test_ll' : log_likelihood_test,
-                'train_ll' : log_likelihood_train, 
-                'test_elbo' : elbo_test.item(), 
-                'train_elbo' : elbo_train.item()}
-    else:
-        return {'test_loss': evaluate_loss.item(), 
-                'test_re' : evaluate_re.item(),
-                'test_kl': evaluate_kl.item()} 
+        output['test_ll'] = log_likelihood_test
+        output['train_ll'] = log_likelihood_train
+        output['test_elbo'] = elbo_test.item()
+        output['train_elbo'] = elbo_train.item()
+    
+    return output
 
 def evaluate_classifier(args, classifier, data_loader):
 

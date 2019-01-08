@@ -136,10 +136,12 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
     train_loss_history = []
     train_re_history = []
     train_kl_history = []
-
+    if arguments.semi_sup: train_ce_history = []
+        
     val_loss_history = []
     val_re_history = []
     val_kl_history = []
+    if arguments.semi_sup: val_ce_history = []
 
     time_history = []
 
@@ -176,35 +178,54 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
             #    vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
             #                             arguments.input_size[2]), win='means2')
 
-
-        val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
         
         time_end = time.time()
-
         time_elapsed = time_end - time_start
 
+        # round the numbers:
+        train_results = {k: np.round(v,2) for k, v in train_results.items()}
+        val_results = {k: np.round(v,2) for k, v in val_results.items()}
+
         # appending history
-        train_loss_history.append(train_loss_epoch), train_re_history.append(train_re_epoch), train_kl_history.append(
-            train_kl_epoch)
-        val_loss_history.append(val_loss_epoch), val_re_history.append(val_re_epoch), val_kl_history.append(
-           val_kl_epoch)
-        time_history.append(time_elapsed)
+        train_loss_history.append(train_results['train_loss'])
+        train_re_history.append(train_results['train_re'])
+        train_kl_history.append(train_results['train_kl'])
+        if arguments.semi_sup: train_ce_history.append(train_results['train_ce'])
+        
+        val_loss_history.append(val_results['test_loss'])
+        val_re_history.append(val_results['test_re'])
+        val_kl_history.append(val_results['test_kl'])
+        if arguments.semi_sup: val_ce_history.append(val_results['test_ce'])
 
         # printing results
-        print('Epoch: {}/{}, Time elapsed: {}s\n'
+        if arguments.semi_sup:
+            print('Epoch: {}/{}, Time elapsed: {}s\n'
+              '* Train loss: {}   (RE: {}, KL: {}, CE: {})\n'
+              'o Val.  loss: {}   (RE: {}, KL: {}, CE: {})\n'
+              '--> Early stopping: {}/{} (BEST: {})\n'.format(
+            epoch, arguments.epochs, time_elapsed,
+            train_results['train_loss'], train_results['train_re'], 
+            train_results['train_kl'], train_results['train_ce'],
+            val_results['test_loss'], val_results['test_re'], 
+            val_results['test_kl'], val_results['test_ce'],
+            e, arguments.early_stopping_epochs, best_loss
+        ))
+        else:    
+            print('Epoch: {}/{}, Time elapsed: {}s\n'
               '* Train loss: {}   (RE: {}, KL: {})\n'
               'o Val.  loss: {}   (RE: {}, KL: {})\n'
               '--> Early stopping: {}/{} (BEST: {})\n'.format(
             epoch, arguments.epochs, time_elapsed,
-            train_loss_epoch, train_re_epoch, train_kl_epoch,
-            val_loss_epoch, val_re_epoch, val_kl_epoch,
+            train_results['train_loss'], train_results['train_re'], train_results['train_kl'],
+            val_results['test_loss'], val_results['test_re'], val_results['test_kl'],
             e, arguments.early_stopping_epochs, best_loss
         ))
+
         
         # early-stopping
-        if val_loss_epoch < best_loss:
+        if val_results['test_loss'] < best_loss:
             e = 0
-            best_loss = val_loss_epoch
+            best_loss = val_results['test_loss']
             # best_model = model
             print('model saved')
             torch.save(model.state_dict(), dr + '.model')
@@ -216,7 +237,7 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
                 break
 
         # NaN
-        if math.isnan(val_loss_epoch):
+        if math.isnan(val_results['test_loss']):
             break
 
 

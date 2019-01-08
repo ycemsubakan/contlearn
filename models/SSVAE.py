@@ -149,7 +149,7 @@ class SSVAE(Model):
                     self.mixingw = NonLinear(self.args.number_components, 1, bias=False, 
                                              activation=nn.Softmax(dim=0)) 
 
-    def reconstruct_means(self):
+    def reconstruct_means(self, head=None):
         K = self.means.linear.weight.size(1)
         eye = torch.eye(K, K).cuda()
 
