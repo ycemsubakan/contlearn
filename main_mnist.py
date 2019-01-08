@@ -164,6 +164,7 @@ all_results = []
 
 exp_details = 'permutation_' + str(arguments.permindex) + '_db_' + str(arguments.dynamic_binarization) + '_' + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_' + str(arguments.replay_size) + '_replaytype_' + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
+print(results_name)
 
 # load the permutations
 permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')

@@ -4,6 +4,11 @@ import os
 import time
 import sys
 
+try:
+    host = sys.argv[2]
+except: 
+    host = 'cedar'
+print(host)
 
 PRIORS = ['vampprior_short', 'standard']
 REPLAYS = ['increase', 'constant']
@@ -12,11 +17,16 @@ ADD_CAP = [1]
 #REBALANCES = [0, 1]
 VAMP_MIX = [1]
 DYNAMIC_BINARIZATION = [1]
-PERM_RANGE = range(0, 5)
+
+if host == 'cedar':
+    PERM_RANGE = range(0, 5)
+else: 
+    PERM_RANGE = range(5, 10)
 
 # dopnt iterate through them now
 add_cap = ADD_CAP[0]
 vamp_mix = VAMP_MIX[0]
+
 
 for prior in PRIORS:
     if prior == 'vampprior_short':
@@ -39,7 +49,10 @@ for prior in PRIORS:
             
                     print(command)
             
-                    command = "{} cc_launch_cl.sh {}".format(sys.argv[1], command) 
+                    if host == 'cedar':
+                        command = "{} cc_launch_cl.sh {}".format(sys.argv[1], command) 
+                    else:
+                        command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
 
                     os.system(command)
                     time.sleep(2)
