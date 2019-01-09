@@ -65,14 +65,3 @@ for prior in PRIORS:
                         os.system(command)
                         time.sleep(2)
 
-
-
-
-
-
-
-
-
-
-
-

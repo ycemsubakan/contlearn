@@ -169,11 +169,13 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
                  prev_model=None):
+    
     # set loss to 0
     evaluate_loss = 0
     evaluate_re = 0
     evaluate_kl = 0
-    # set model to evaluation mode
+    if args.semi_sup: evaluate_ce = 0
+    
     model.eval()
 
     # evaluate
@@ -183,8 +185,12 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
         data, target = Variable(data, volatile=True), Variable(target)
 
-        #if args.dataset_name == 'patch_celeba':
-        #    data = data.reshape(-1, int(np.prod(args.input_size)))
+        # to avoid the singleton case (otherwise it breaks the code)
+        if data.size(0) == 1:
+            data = torch.cat([data, data], dim=0)
+        
+        if args.dataset_name == 'patch_celeba':
+            data = data.reshape(-1, int(np.prod(args.input_size)))
 
         # to avoid the singleton case (otherwise it breaks the code)
         if data.size(0) == 1:
@@ -192,14 +198,16 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         x = data
 
         # calculate loss function
-        loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0)
+        if args.semi_sup:
+            loss, RE, KL, CE, _ = model.calculate_loss(x.reshape(x.size(0), -1), target, average=True)
+        else:
+            loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0)
 
-        evaluate_loss += loss.data[0] 
-        evaluate_re += -RE.data[0] 
+        evaluate_loss += loss.item() 
+        evaluate_re += -RE.item()
+        evaluate_kl += KL.item()
+        if args.semi_sup: evaluate_ce += CE.item()
 
-        evaluate_kl += KL.data[0]
-
-        
     if mode == 'test':
         # load all data
         # grab the test data by iterating over the loader
@@ -251,33 +259,41 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
             #plot_images(args, pseudoinputs[0:25], dir, 'pseudoinputs', size_x=5, size_y=5)
 
+        # CALCULATE accuracy
+        if args.semi_sup:
+            t_ll_s = time.time()
+            acc_test = model.calculate_accuracy(test_data, test_target, MB=args.MB)
+            t_ll_e = time.time()
+            print('Test accuracy value {:.2f} in time: {:.2f}s'.format(acc_test, t_ll_e - t_ll_s))
+        
         # CALCULATE lower-bound
         t_ll_s = time.time()
         elbo_test = model.calculate_lower_bound(test_data, MB=args.MB)
         t_ll_e = time.time()
         print('Test lower-bound value {:.2f} in time: {:.2f}s'.format(elbo_test, t_ll_e - t_ll_s))
 
-        # CALCULATE log-likelihood
+        # CALCULATE lower-bound
         t_ll_s = time.time()
-        #if not args.dataset_name == 'celeba':
-        elbo_train = model.calculate_lower_bound(full_data, MB=args.MB)
-        #else:
-         #   elbo_train = torch.Tensor([0])
+        if not args.debug: elbo_train = model.calculate_lower_bound(full_data, MB=args.MB).item()
+        else: elbo_train = -1
         t_ll_e = time.time()
         print('Train lower-bound value {} in time: {:.2f}s'.format(elbo_train, t_ll_e - t_ll_s))
 
         # CALCULATE log-likelihood
         t_ll_s = time.time()
-        if 1:
-            log_likelihood_test = model.calculate_likelihood(test_data, dir, mode='test', S=args.S, MB=args.MB)
-        else:
-            log_likelihood_test = 0
+        if not args.debug: 
+            log_likelihood_test = model.calculate_likelihood(test_data, 
+                dir, mode='test', S=args.S, MB=args.MB).item()
+        else: 
+            log_likelihood_test = -1 
         t_ll_e = time.time()
         print('Test log_likelihood value {:.2f} in time: {:.2f}s'.format(log_likelihood_test, t_ll_e - t_ll_s))
 
         # CALCULATE log-likelihood
         t_ll_s = time.time()
-        log_likelihood_train = 0. #model.calculate_likelihood(full_data, dir, mode='train', S=args.S, MB=args.MB)) #commented because it takes too much time
+        #model.calculate_likelihood(full_data, dir, mode='train', S=args.S, MB=args.MB))
+        #commented because it takes too much time
+        log_likelihood_train = -1
         t_ll_e = time.time()
         print('Train log_likelihood value {:.2f} in time: {:.2f}s'.format(log_likelihood_train, t_ll_e - t_ll_s))
 
@@ -285,18 +301,24 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
     evaluate_loss /= len(data_loader)  # loss function already averages over batch size
     evaluate_re /= len(data_loader)  # re already averages over batch size
     evaluate_kl /= len(data_loader)  # kl already averages over batch size
+    if args.semi_sup: evaluate_ce /= len(data_loader)  # ce already averages over batch size
+    
+    output = {'test_loss': evaluate_loss, 
+                'test_re' : evaluate_re,
+                'test_kl' : evaluate_kl}
+    
+    if args.semi_sup:
+        output['test_ce'] = evaluate_ce
+        
     if mode == 'test':
-        return {'test_loss': evaluate_loss.item(), 
-                'test_re' : evaluate_re.item(),
-                'test_kl': evaluate_kl.item(), 
-                'test_ll' : log_likelihood_test,
-                'train_ll' : log_likelihood_train, 
-                'test_elbo' : elbo_test.item(), 
-                'train_elbo' : elbo_train.item()}
-    else:
-        return {'test_loss': evaluate_loss.item(), 
-                'test_re' : evaluate_re.item(),
-                'test_kl': evaluate_kl.item()} 
+        output['test_ll'] = log_likelihood_test
+        output['train_ll'] = log_likelihood_train
+        output['test_elbo'] = elbo_test
+        output['train_elbo'] = elbo_train
+        if args.semi_sup:
+            output['test_acc'] = acc_test
+    
+    return output
 
 def evaluate_classifier(args, classifier, data_loader):
 

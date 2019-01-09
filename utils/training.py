@@ -19,6 +19,9 @@ vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem
 #assert vis.check_connection()
 
 
+
+
+
 def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader, 
                              model, optimizer, dr, model_name='vae', prev_model=None):
     from utils.evaluation import evaluate_vae as evaluate
@@ -136,18 +139,22 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
     train_loss_history = []
     train_re_history = []
     train_kl_history = []
-
+    if arguments.semi_sup: train_ce_history = []
+        
     val_loss_history = []
     val_re_history = []
     val_kl_history = []
+    if arguments.semi_sup: val_ce_history = []
 
     time_history = []
 
     for epoch in range(1, arguments.epochs + 1):
         time_start = time.time()
         #if prev_model == None:
-        model, train_loss_epoch, train_re_epoch, train_kl_epoch = train_vae(epoch, 
-        arguments, train_loader, model, optimizer, classifier=classifier, prev_classifier=prev_classifier, prev_model=prev_model, optimizer_cls=optimizer_cls, perm=perm, dg=dg)
+        model, train_results = train_vae(epoch, 
+                        arguments, train_loader, model, optimizer, classifier=classifier, 
+                        prev_classifier=prev_classifier, prev_model=prev_model,  
+                        optimizer_cls=optimizer_cls, perm=perm, dg=dg)
 
         # merge the means for evaluation and sampling
         if (dg > 0) and arguments.separate_means: 
@@ -174,35 +181,54 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
             #    vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
             #                             arguments.input_size[2]), win='means2')
 
-
-        val_loss_epoch, val_re_epoch, val_kl_epoch = val_results['test_loss'], val_results['test_re'], val_results['test_kl']      
         
         time_end = time.time()
-
         time_elapsed = time_end - time_start
 
+        # round the numbers:
+        train_results = {k: np.round(v,2) for k, v in train_results.items()}
+        val_results = {k: np.round(v,2) for k, v in val_results.items()}
+
         # appending history
-        train_loss_history.append(train_loss_epoch), train_re_history.append(train_re_epoch), train_kl_history.append(
-            train_kl_epoch)
-        val_loss_history.append(val_loss_epoch), val_re_history.append(val_re_epoch), val_kl_history.append(
-           val_kl_epoch)
-        time_history.append(time_elapsed)
+        train_loss_history.append(train_results['train_loss'])
+        train_re_history.append(train_results['train_re'])
+        train_kl_history.append(train_results['train_kl'])
+        if arguments.semi_sup: train_ce_history.append(train_results['train_ce'])
+        
+        val_loss_history.append(val_results['test_loss'])
+        val_re_history.append(val_results['test_re'])
+        val_kl_history.append(val_results['test_kl'])
+        if arguments.semi_sup: val_ce_history.append(val_results['test_ce'])
 
         # printing results
-        print('Epoch: {}/{}, Time elapsed: {}s\n'
+        if arguments.semi_sup:
+            print('Epoch: {}/{}, Time elapsed: {}s\n'
+              '* Train loss: {}   (RE: {}, KL: {}, CE: {})\n'
+              'o Val.  loss: {}   (RE: {}, KL: {}, CE: {})\n'
+              '--> Early stopping: {}/{} (BEST: {})\n'.format(
+            epoch, arguments.epochs, time_elapsed,
+            train_results['train_loss'], train_results['train_re'], 
+            train_results['train_kl'], train_results['train_ce'],
+            val_results['test_loss'], val_results['test_re'], 
+            val_results['test_kl'], val_results['test_ce'],
+            e, arguments.early_stopping_epochs, best_loss
+        ))
+        else:    
+            print('Epoch: {}/{}, Time elapsed: {}s\n'
               '* Train loss: {}   (RE: {}, KL: {})\n'
               'o Val.  loss: {}   (RE: {}, KL: {})\n'
               '--> Early stopping: {}/{} (BEST: {})\n'.format(
             epoch, arguments.epochs, time_elapsed,
-            train_loss_epoch, train_re_epoch, train_kl_epoch,
-            val_loss_epoch, val_re_epoch, val_kl_epoch,
+            train_results['train_loss'], train_results['train_re'], train_results['train_kl'],
+            val_results['test_loss'], val_results['test_re'], val_results['test_kl'],
             e, arguments.early_stopping_epochs, best_loss
         ))
+
         
         # early-stopping
-        if val_loss_epoch < best_loss:
+        if val_results['test_loss'] < best_loss:
             e = 0
-            best_loss = val_loss_epoch
+            best_loss = val_results['test_loss']
             # best_model = model
             print('model saved')
             torch.save(model.state_dict(), dr + '.model')
@@ -214,7 +240,7 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
                 break
 
         # NaN
-        if math.isnan(val_loss_epoch):
+        if math.isnan(val_results['test_loss']):
             break
     
     return epoch
@@ -276,7 +302,8 @@ def train_vae(epoch, args, train_loader, model,
     train_loss = 0
     train_re = 0
     train_kl = 0
-    # set model in training mode
+    if args.semi_sup: train_ce = 0
+
     model.train()
 
     # start training
@@ -302,13 +329,18 @@ def train_vae(epoch, args, train_loader, model,
                 cst = 1 
             else:
                 cst = copy.deepcopy(dg)
-            x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
-            if epoch % 10 == 0:
+            # generate replay data:
+            if args.semi_sup:
+                x_replay, y_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+            else:    
+                x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+            if epoch % args.num_classes == 0:
                 print('replay size {}'.format(x_replay.size(0)))
             
             if args.replay_size == 'increase': 
                 data = torch.cat([data, x_replay.data], dim=0)
-
+                if args.semi_sup:
+                    target = torch.cat([target, y_replay], dim=0)
 
         
         #if len(data.shape) > 2:
@@ -324,28 +356,57 @@ def train_vae(epoch, args, train_loader, model,
         
         # loss evaluation (forward pass)
         if args.separate_means and (dg > 0) and (args.replay_size == 'constant'):
-            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
-            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=1)
+           
+            if args.semi_sup:
+                raise Exception('not implmented yet!')
+ 
+            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
+            loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=1)
 
             loss = loss1 + loss2
             RE = RE1 + RE2
             KL = KL1 + KL2 
-        elif (args.separate_means == False) and (dg > 0) and (args.replay_size == 'constant'):
-            loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta, average=True, head=0)
-            loss2, RE2, KL2, _ = model.calculate_loss(x, beta, average=True, head=0)
+        
+        elif not args.separate_means  and (dg > 0) and (args.replay_size == 'constant'):
+            
+            if args.semi_sup:
+                loss1, RE1, KL1, CE1, _ = model.calculate_loss(x_replay, y_replay, beta=beta, average=True, head=0)
+                loss2, RE2, KL2, CE2, _ = model.calculate_loss(x, target, beta=beta, average=True, head=0)
 
-            if args.use_replaycostcorrection:
-                loss = (dg)*loss1 + loss2
+                if args.use_replaycostcorrection:
+                    loss = (dg)*loss1 + loss2
+                else:
+                    loss = loss1 + loss2
+
+                RE = RE1 + RE2
+                KL = KL1 + KL2 
+                CE = CE1 + CE2
+            
             else:
-                loss = loss1 + loss2
+                loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
+                loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=0)
 
-            RE = RE1 + RE2
-            KL = KL1 + KL2 
+                if args.use_replaycostcorrection:
+                    loss = (dg)*loss1 + loss2
+                else:
+                    loss = loss1 + loss2
+
+                RE = RE1 + RE2
+                KL = KL1 + KL2 
+        
         elif ( (args.separate_means == False) and (dg == 0) ) or (args.replay_size == 'increase'):
-            loss, RE, KL, _ = model.calculate_loss(x, beta, average=True)
+            
+            if args.semi_sup:
+                loss, RE, KL, CE, _ = model.calculate_loss(x, target, beta=beta, average=True)
+            else:    
+                loss, RE, KL, _ = model.calculate_loss(x, beta=beta, average=True)
         
         if (args.replay_type == 'prototype') and (dg > 0):
-            loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta, average=True)
+            
+            if args.semi_sup:
+                raise Exception('not implemented yet!')
+            
+            loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
         
         if batch_idx % 300 == 0:
@@ -364,13 +425,24 @@ def train_vae(epoch, args, train_loader, model,
         train_loss += loss.item()
         train_re += -RE.item()
         train_kl += KL.item()
+        if args.semi_sup: train_ce += CE.item()
 
     # calculate final loss
     train_loss /= len(train_loader)  # loss function already averages over batch size
     train_re /= len(train_loader)  # re already averages over batch size
     train_kl /= len(train_loader)  # kl already averages over batch size
-
-    return model, train_loss, train_re, train_kl
+    
+    train_results = {}
+    train_results['train_loss'] = train_loss
+    train_results['train_re']   = train_re
+    train_results['train_kl']   = train_kl
+    train_results['train_kl']   = train_kl
+    
+    if args.semi_sup:
+        train_ce /= len(train_loader)
+        train_results['train_ce'] = train_ce
+         
+    return model, train_results
 
 def train_vae_multihead(epoch, args, train_loader, model, optimizer, prev_model):
     # set loss to 0
