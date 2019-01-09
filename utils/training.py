@@ -19,6 +19,9 @@ vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem
 assert vis.check_connection()
 
 
+
+
+
 def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader, 
                              model, optimizer, dr, model_name='vae', prev_model=None):
     from utils.evaluation import evaluate_vae as evaluate
