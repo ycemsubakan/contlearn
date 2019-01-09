@@ -206,9 +206,6 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         # grab the test data by iterating over the loader
         # there is no standardized tensor_dataset member across pytorch datasets
         
-        if args.semi_sup:
-            pdb.set_trace()
-    
         test_data, test_target = [], []
         for data, lbls in data_loader:
             test_data.append(data)
@@ -255,33 +252,38 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
             #plot_images(args, pseudoinputs[0:25], dir, 'pseudoinputs', size_x=5, size_y=5)
 
+        # CALCULATE accuracy
+        if args.semi_sup:
+            t_ll_s = time.time()
+            acc_test = model.calculate_accuracy(test_data, test_target, MB=args.MB)
+            t_ll_e = time.time()
+            print('Test accuracy value {:.2f} in time: {:.2f}s'.format(acc_test, t_ll_e - t_ll_s))
+        
         # CALCULATE lower-bound
         t_ll_s = time.time()
         elbo_test = model.calculate_lower_bound(test_data, MB=args.MB)
         t_ll_e = time.time()
         print('Test lower-bound value {:.2f} in time: {:.2f}s'.format(elbo_test, t_ll_e - t_ll_s))
 
-        # CALCULATE log-likelihood
+        # CALCULATE lower-bound
         t_ll_s = time.time()
-        #if not args.dataset_name == 'celeba':
-        elbo_train = model.calculate_lower_bound(full_data, MB=args.MB)
-        #else:
-         #   elbo_train = torch.Tensor([0])
+        #elbo_train = model.calculate_lower_bound(full_data, MB=args.MB)
+        #commented because it takes too much time
+        elbo_train = 0
         t_ll_e = time.time()
         print('Train lower-bound value {} in time: {:.2f}s'.format(elbo_train, t_ll_e - t_ll_s))
 
         # CALCULATE log-likelihood
         t_ll_s = time.time()
-        if 1:
-            log_likelihood_test = model.calculate_likelihood(test_data, dir, mode='test', S=args.S, MB=args.MB)
-        else:
-            log_likelihood_test = 0
+        log_likelihood_test = model.calculate_likelihood(test_data, dir, mode='test', S=args.S, MB=args.MB)
         t_ll_e = time.time()
         print('Test log_likelihood value {:.2f} in time: {:.2f}s'.format(log_likelihood_test, t_ll_e - t_ll_s))
 
         # CALCULATE log-likelihood
         t_ll_s = time.time()
-        log_likelihood_train = 0. #model.calculate_likelihood(full_data, dir, mode='train', S=args.S, MB=args.MB)) #commented because it takes too much time
+        #model.calculate_likelihood(full_data, dir, mode='train', S=args.S, MB=args.MB))
+        #commented because it takes too much time
+        log_likelihood_train = 0.
         t_ll_e = time.time()
         print('Train log_likelihood value {:.2f} in time: {:.2f}s'.format(log_likelihood_train, t_ll_e - t_ll_s))
 
@@ -302,7 +304,9 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         output['test_ll'] = log_likelihood_test
         output['train_ll'] = log_likelihood_train
         output['test_elbo'] = elbo_test.item()
-        output['train_elbo'] = elbo_train.item()
+        output['train_elbo'] = elbo_train
+        if args.semi_sup:
+            output['test_acc'] = acc_test
     
     return output
 

@@ -362,8 +362,11 @@ def train_vae(epoch, args, train_loader, model,
             loss = loss1 + loss2
             RE = RE1 + RE2
             KL = KL1 + KL2 
-        elif (args.separate_means == False) and (dg > 0) and (args.replay_size == 'constant'):
+        
+        elif not args.separate_means  and (dg > 0) and (args.replay_size == 'constant'):
+            
             if args.semi_sup:
+                pdb.set_trace()
                 loss1, RE1, KL1, CE1, _ = model.calculate_loss(x_replay, y_replay, beta=beta, average=True, head=0)
                 loss2, RE2, KL2, CE2, _ = model.calculate_loss(x, target, beta=beta, average=True, head=0)
 
@@ -375,6 +378,7 @@ def train_vae(epoch, args, train_loader, model,
                 RE = RE1 + RE2
                 KL = KL1 + KL2 
                 CE = CE1 + CE2
+            
             else:
                 loss1, RE1, KL1, _ = model.calculate_loss(x_replay, beta=beta, average=True, head=0)
                 loss2, RE2, KL2, _ = model.calculate_loss(x, beta=beta, average=True, head=0)
@@ -386,6 +390,7 @@ def train_vae(epoch, args, train_loader, model,
 
                 RE = RE1 + RE2
                 KL = KL1 + KL2 
+        
         elif ( (args.separate_means == False) and (dg == 0) ) or (args.replay_size == 'increase'):
             
             if args.semi_sup:

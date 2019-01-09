@@ -192,7 +192,7 @@ for dg in range(0, 10):
         prev_model = None
         prev_classifier = None
 
-    if arguments.use_classifier == True:
+    if arguments.use_classifier:
         optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
 
         tr.train_classifier(arguments, train_loader, classifier=classifier, 
@@ -231,16 +231,12 @@ for dg in range(0, 10):
 
     # when doing the hyperparameter search, pay attention to what results you are saving
     if 1: 
-        try:
-            temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
-            all_results.append(temp[dg])
-        except:
-            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
-            results['digit'] = dg
-            results['class'] = acc.item()
-            results['time'] = t2 - t1
-            all_results.append(results)
-            pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
+        results['digit'] = dg
+        #results['class'] = acc.item()
+        results['time'] = t2 - t1
+        all_results.append(results)
+        pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
     
     if arguments.replay_type == 'replay': 
         prev_model = copy.deepcopy(model)
@@ -255,48 +251,10 @@ for dg in range(0, 10):
     if arguments.use_classifier:
         prev_classifier = copy.deepcopy(classifier)
     
-    #opts={}
-    #opts['title'] = 'means1'
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means1', opts=opts)
 
     # little questionable 
     if arguments.add_cap and (dg < 9) and (arguments.prior != 'standard'):
         model.add_latent_cap(dg)
     else:
         model.restart_latent_space()
-
-    #opts={}
-    #opts['title'] = 'means2'
-
-    ##model.merge_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means2', opts=opts)
-
-    #opts={}
-    #opts['title'] = 'means3'
-
-    ##model.merge_latent()
-    #means = model.reconstruct_means(head=1)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means3', opts=opts)
-
-
-    #opts['title'] = 'means3'
-    #model.separate_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means3', opts=opts)
-
-
-    #opts['title'] = 'means4'
-    #model.merge_latent()
-    #means = model.reconstruct_means(head=0)
-    #vis.images(means.reshape(-1, arguments.input_size[0], arguments.input_size[1],
-    #                         arguments.input_size[2]), win='means4', opts=opts)
-
-
-    #pdb.set_trace()
 

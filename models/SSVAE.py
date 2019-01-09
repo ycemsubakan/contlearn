@@ -63,7 +63,7 @@ class SSVAE(Model):
 
         self.semi_supervisor = nn.Sequential(Linear(args.z1_size, args.num_classes), 
                                                  nn.Softmax())
-        self.criterion = nn.CrossEntropyLoss()
+        #self.criterion = nn.CrossEntropyLoss()
         
         # weights initialization
         for m in self.modules():
@@ -73,7 +73,6 @@ class SSVAE(Model):
         # add pseudo-inputs if VampPrior
         if self.args.prior in ['vampprior', 'vampprior_short']:
             self.add_pseudoinputs()
-
 
     def restart_latent_space(self):
         nonlinearity = nn.Hardtanh(min_val=0.0, max_val=1.0)
@@ -108,7 +107,6 @@ class SSVAE(Model):
         self.means[1] = NonLinear(number_components_init, 300, bias=False, activation=nonlinearity).cuda()
         self.means[0].linear.weight.data = prev_components
         self.means[1].linear.weight.data = last_prev_components
-
 
     def add_latent_cap(self, dg):
         if self.args.prior == 'vampprior_short':
@@ -182,8 +180,7 @@ class SSVAE(Model):
         self.mixingw_c = mixingw_c.data.cpu().numpy()
         return yhat_means
 
-
-    def calculate_loss(self, x, y, beta=1., average=False, head=None):
+    def calculate_loss(self, x, y=None, beta=1., average=False, head=None):
         '''
         :param x: input image(s)
         :param beta: a hyperparam for warmup
@@ -210,25 +207,62 @@ class SSVAE(Model):
         log_q_z = log_Normal_diag(z_q, z_q_mean, z_q_logvar, dim=1)
         KL = -(log_p_z - log_q_z)
 
-        # CE
-        CE = self.criterion(y_hat, y)
-
-        # total loss
-        loss = - RE + beta * KL + self.args.Lambda * CE
-
+        # loss
+        loss = - RE + beta * KL #+ self.args.Lambda * CE
+       
         if average:
             loss = torch.mean(loss)
             RE = torch.mean(RE)
             KL = torch.mean(KL)
+        
+        if y is None:
+            return loss, RE, KL, x_mean
+        
+        # CE
+        if len(y.shape)==1:
+            CE =  F.nll_loss(torch.log(y_hat), y)
+        else:
+            CE = - (y * torch.log(y_hat)).mean()
+        
+        # loss
+        loss += self.args.Lambda * CE
+
+        if average:
             CE = torch.mean(CE)
 
         return loss, RE, KL, CE, x_mean
 
+    def calculate_lower_bound(self, X_full, MB=100):
+        # CALCULATE LOWER BOUND:
+        lower_bound = 0.
+        RE_all = 0.
+        KL_all = 0.
+
+        # dealing the case where the last batch is of size 1
+        remainder = X_full.size(0) % MB
+        if remainder == 1:
+            X_full = X_full[:(X_full.size(0) - remainder)]
+
+        I = int(math.ceil(X_full.size(0) / MB))
+
+        for i in range(I):
+            if not self.args.dataset_name == 'celeba':
+                x = X_full[i * MB: (i + 1) * MB].view(-1, np.prod(self.args.input_size))
+            else:
+                x = X_full[i * MB: (i + 1) * MB]
+
+            loss, RE, KL, _ = self.calculate_loss(x, average=True)
+
+            RE_all += RE.cpu().data[0]
+            KL_all += KL.cpu().data[0]
+            lower_bound += loss.cpu().data[0]
+
+        lower_bound /= I
+
+        return lower_bound
+    
     def calculate_likelihood(self, X, dir, mode='test', S=5000, MB=100):
 
-        # havent touched yet:
-        pdb.set_trace()
-        
         # set auxiliary variables for number of training and test sets
         N_test = X.size(0)
 
@@ -271,34 +305,36 @@ class SSVAE(Model):
 
         return -np.mean(likelihood_test)
 
-    def calculate_lower_bound(self, X_full, MB=100):
-        # CALCULATE LOWER BOUND:
-        lower_bound = 0.
-        RE_all = 0.
-        KL_all = 0.
+    def calculate_accuracy(self, X_full, y_full, MB=100):
+        # CALCULATE ACCURACY:
+        acc = 0.
 
         # dealing the case where the last batch is of size 1
         remainder = X_full.size(0) % MB
         if remainder == 1:
             X_full = X_full[:(X_full.size(0) - remainder)]
+            y_full = y_full[:(X_full.size(0) - remainder)]
 
         I = int(math.ceil(X_full.size(0) / MB))
 
         for i in range(I):
             if not self.args.dataset_name == 'celeba':
                 x = X_full[i * MB: (i + 1) * MB].view(-1, np.prod(self.args.input_size))
+                y = y_full[i * MB: (i + 1) * MB]
             else:
                 x = X_full[i * MB: (i + 1) * MB]
+                y = y_full[i * MB: (i + 1) * MB]
+            
+            _, _, _, _, _, y_hat = self.forward(x)
+            _, predicted = torch.max(y_hat.data, 1)
 
-            loss, RE, KL, _ = self.calculate_loss(x,average=True)
+            correct = (predicted == y).sum().item()
 
-            RE_all += RE.cpu().data[0]
-            KL_all += KL.cpu().data[0]
-            lower_bound += loss.cpu().data[0]
+            acc += correct
 
-        lower_bound /= I
+        acc /= I
 
-        return lower_bound
+        return acc
 
     # ADDITIONAL METHODS
     def generate_x(self, N=25, replay=False):
@@ -358,7 +394,7 @@ class SSVAE(Model):
         return samples_rand, y_rand
 
     def reconstruct_x(self, x):
-        x_mean, _, _, _, _ = self.forward(x)
+        x_mean, _, _, _, _, _ = self.forward(x)
         return x_mean
 
     # THE MODEL: VARIATIONAL POSTERIOR
@@ -464,7 +500,6 @@ class SSVAE(Model):
         y_hat = self.semi_supervisor(z_q_mean)
         return x_mean, x_logvar, z_q, z_q_mean, z_q_logvar, y_hat
 
-
     def get_embeddings(self, train_loader, cuda=True, flatten=True):
         # get hhats for all batches
         if self.args.dataset_name == 'celeba':
@@ -490,50 +525,3 @@ class SSVAE(Model):
 
 
 
-'''
-class conv_vae(VAE):
-    def __init__(self, args):
-        super(conv_vae, self).__init__(args)
-
-        # encoder: q(z | x)
-        d = 32
-        act = F.relu 
-        self.q_z_layers = nn.Sequential(
-            GatedConv2d(self.args.input_size[0], d, 4, 2, 1, activation=act),
-            GatedConv2d(d, 2*d, 4, 2, 1, activation=act),
-            GatedConv2d(2*d, 4*d, 4, 2, 1, activation=act),
-            GatedConv2d(4*d, 8*d, 4, 2, 1, activation=act),
-            GatedConv2d(8*d, self.args.z1_size, 4, 1, 0, activation=None)
-        )
-
-        self.q_z_mean = Linear(self.args.z1_size, self.args.z1_size)
-        self.q_z_logvar = NonLinear(self.args.z1_size, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
-
-        # decoder: p(x | z)
-        self.p_x_layers = nn.Sequential(
-            GatedConvTranspose2d(self.args.z1_size, 8*d, 4, 1, 0, activation=act),
-            GatedConvTranspose2d(8*d, 4*d, 4, 2, 1, activation=act),
-            GatedConvTranspose2d(4*d, 2*d, 4, 2, 1, activation=act),
-            GatedConvTranspose2d(2*d, d, 4, 2, 1, activation=act),
-            GatedConvTranspose2d(d, d, 4, 2, 1, activation=None)
-        )
-
-        if self.args.input_type == 'binary':
-            self.p_x_mean = Conv2d(d, 1, 1, 1, 0, activation=nn.Sigmoid())
-        elif self.args.input_type == 'gray' or self.args.input_type == 'continuous':
-            self.p_x_mean = Conv2d(d, self.args.input_size[0], 1, 1, 0, activation=nn.Sigmoid())
-            self.p_x_logvar = Conv2d(d, self.args.input_size[0], 1, 1, 0, activation=nn.Hardtanh(min_val=-4.5, max_val=0.))
-
-        
-        # weights initialization
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                he_init(m)
-
-        # add pseudo-inputs if VampPrior
-        if self.args.prior == 'vampprior':
-            self.add_pseudoinputs()
-        elif self.args.prior == 'GMM': 
-            self.initialize_GMMparams(Kmog=10, mode='random') 
-
-'''
