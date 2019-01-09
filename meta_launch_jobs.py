@@ -7,25 +7,29 @@ import sys
 
 PRIORS = ['vampprior_short']
 REPLAYS = ['increase']
-ADD_CAP = [1]
+ADD_CAP = [0]
 #CLASSIFIER = [1]
-REBALANCES = [0, 1]
+REBALANCES = [0]
 VAMP_MIX = [1]
-
+LAMBDAS = [0, 1, 2, 5, 10, 100]
 
 # dopnt iterate through them now
 add_cap = ADD_CAP[0]
 vamp_mix = VAMP_MIX[0]
 dynamic_binarization = [1]
+K = 500
 
 for prior in PRIORS:
   for replay in REPLAYS:
     for rebalance in REBALANCES:  
         for db in dynamic_binarization:
+          for Lambda in LAMBDAS:
             command="main_mnist.py \
                 --prior %(prior)s \
                 --replay_size %(replay)s \
                 --add_cap %(add_cap)s \
+                --Lambda %(Lambda)s \
+                --number_components %(K)s \
                 --use_vampmixingw %(vamp_mix)s \
                 --use_mixingw_correction %(rebalance)s \
                 --dynamic_binarization %(db)s" % locals()

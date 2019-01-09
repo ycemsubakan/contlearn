@@ -24,6 +24,8 @@ parser = argparse.ArgumentParser(description='Multitask experiments')
 
 parser.add_argument('--use_visdom', type=int, default=0, 
                     help='use/not use visdom, {0, 1}')
+parser.add_argument('--debug', action='store_true', 
+                    help='debugging mode skips stuff')
 parser.add_argument('--batch_size', type=int, default=100, metavar='BStrain',
                     help='input batch size for training (default: 100)')
 parser.add_argument('--test_batch_size', type=int, default=100, metavar='BStest',
@@ -99,10 +101,12 @@ parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or n
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
+parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
+
+# semi supervise
 parser.add_argument('--semi_sup', type=int, default=1, help='wheter or not to do semi-supervised learning')
 parser.add_argument('--Lambda', type=float, default=1, help='weight of the classification loss')
-parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
-parser.add_argument('--use_replaycostcorrection', type=int, default=1, help='whether or not to use a constant for replay cost correction, {0, 1}')
 
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
 
@@ -169,7 +173,7 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
-exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + 'replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_semi_sup_' +str(arguments.semi_sup) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
+exp_details = 'db_' + str(arguments.dynamic_binarization) + arguments.model_name + '_' + arguments.prior + '_K' + str(arguments.number_components)  + '_wu' + str(arguments.warmup) + '_z1_' + str(arguments.z1_size) + '_z2_' + str(arguments.z2_size) + '_replay_size_'+ str(arguments.replay_size) + arguments.replay_type + '_add_cap_' + str(arguments.add_cap) + '_usevampmixingw_' + str(arguments.use_vampmixingw) + '_separate_means_' + str(arguments.separate_means) + '_useclassifier_' + str(arguments.use_classifier) + '_semi_sup_' +str(arguments.semi_sup) + '_Lambda_' + str(arguments.Lambda) + '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) +  '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + arguments.notes
 results_name = arguments.dataset_name + '_' + exp_details
 
 model = VAE(arguments).cuda()
@@ -180,6 +184,11 @@ else:
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, 10):
+
+    print('\n________________________')
+    print('starting task {}'.format(dg))
+    print('________________________\n')
+
     train_loader = ut.get_mnist_loaders([dg], 'train', arguments)
     val_loader = ut.get_mnist_loaders(list(range(dg+1)), 'validation', arguments)
     test_loader = ut.get_mnist_loaders(list(range(dg+1)), 'test', arguments)

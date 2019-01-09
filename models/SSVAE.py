@@ -253,9 +253,9 @@ class SSVAE(Model):
 
             loss, RE, KL, _ = self.calculate_loss(x, average=True)
 
-            RE_all += RE.cpu().data[0]
-            KL_all += KL.cpu().data[0]
-            lower_bound += loss.cpu().data[0]
+            RE_all += RE.item()
+            KL_all += KL.item()
+            lower_bound += loss.item()
 
         lower_bound /= I
 
