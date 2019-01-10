@@ -255,7 +255,7 @@ for dg in range(0, 10):
         #except:
         results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
         results['digit'] = dg
-        results['class'] = acc.item()
+        if arguments.use_classifier: results['class'] = acc.item()
         results['time'] = t2 - t1
         results['epochs'] = EPconv
         all_results.append(results)
