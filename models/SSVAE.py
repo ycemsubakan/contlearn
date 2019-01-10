@@ -220,7 +220,10 @@ class SSVAE(Model):
         
         # CE
         if len(y.shape)==1:
-            CE =  F.nll_loss(torch.log(y_hat), y)
+            try:
+                CE =  F.nll_loss(torch.log(y_hat), y)
+            except:
+                pdb.set_trace()
         else:
             CE = - (y * torch.log(y_hat)).mean()
         

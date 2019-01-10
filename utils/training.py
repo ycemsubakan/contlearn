@@ -87,9 +87,9 @@ def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader,
         if val_loss_epoch < best_loss:
             e = 0
             best_loss = val_loss_epoch
-            # best_model = model
-            print('model saved')
-            torch.save(model.state_dict(), dr + '.model')
+            if not args.debug:
+                print('model saved')
+                torch.save(model.state_dict(), dr + '.model')
         else:
             e += 1
             if epoch < arguments.warmup:
@@ -323,6 +323,7 @@ def train_vae(epoch, args, train_loader, model,
         # to avoid the singleton case
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
+            target = torch.cat([target, target], dim=0)
 
         if (prev_model != None) and (args.replay_type == 'replay'):
             if args.replay_size == 'constant':
