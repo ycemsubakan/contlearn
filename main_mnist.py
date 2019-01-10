@@ -88,25 +88,26 @@ parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar
                     help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
 parser.add_argument('--permindex', type=int, default=1, 
                     help='permutation index, integer in [0, 1000)' )
-parser.add_argument('--num_classes', type=int, default=10, help='number of classes')
-parser.add_argument('--dynamic_binarization', type=int, default=0,
+parser.add_argument('--dynamic_binarization', type=int, default=1,
                     help='allow dynamic binarization, {0, 1}')
+parser.add_argument('--num_classes', type=int, default=10, help='number of classes')
 
 # replay parameters
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
 
 parser.add_argument('--replay_type', type=str, default='replay', help='replay, prototype') 
 parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
+parser.add_argument('--classifier_EP', type=int, default='75', help='number of iterations for classifier training')
 
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=1, help='whether or not to use a classifier to balance the classes, in {0, 1}')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
 
 # semi supervise
-parser.add_argument('--semi_sup', type=int, default=1, help='wheter or not to do semi-supervised learning')
+parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
 parser.add_argument('--Lambda', type=float, default=1, help='weight of the classification loss')
 
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
@@ -197,10 +198,11 @@ for dg in range(0, 10):
     print('starting task {}'.format(dg))
     print('________________________\n')
 
-    train_loader = ut.get_mnist_loaders([dg], 'train', arguments)
-    val_loader = ut.get_mnist_loaders(list(range(dg+1)), 'validation', arguments)
-    test_loader = ut.get_mnist_loaders(list(range(dg+1)), 'test', arguments)
 
+    train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments)
+    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments)
+    test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments)
+    
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
 
@@ -225,6 +227,7 @@ for dg in range(0, 10):
 
         model.load_state_dict(torch.load(model_path))
         model = model.cuda()
+        EPconv = t1 = t2 = 0   
     else:
         print('training model... for digit {}'.format(dg))
         optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
@@ -239,6 +242,10 @@ for dg in range(0, 10):
     if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
         yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
         if arguments.use_visdom:
+            means = model.reconstruct_means()
+            opts = {}
+            opts['title'] = 'current means'
+            vis.images(means, win='means_cur', opts=opts)
             vis.text(str(model.mixingw_c), win='mixingw')
             vis.text(str(yhat_means), win='yhat_means')
 
@@ -253,7 +260,7 @@ for dg in range(0, 10):
         #    temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
         #    all_results.append(temp[dg])
         #except:
-        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
+        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction)
         results['digit'] = dg
         if arguments.use_classifier: results['class'] = acc.item()
         results['time'] = t2 - t1

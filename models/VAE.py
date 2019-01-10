@@ -220,7 +220,7 @@ class VAE(Model):
         return yhat_means
 
 
-    def calculate_loss(self, x, beta=1., average=False, head=0):
+    def calculate_loss(self, x, beta=1., average=False, head=0, use_mixw_cor=False):
         '''
         :param x: input image(s)
         :param beta: a hyperparam for warmup
@@ -249,7 +249,7 @@ class VAE(Model):
         if self.args.prior == 'GMM':
             log_p_z = self.log_p_z(z_q, mu=z_q_mean, logvar=z_q_logvar)
         else:
-            log_p_z = self.log_p_z(z_q, head=head)
+            log_p_z = self.log_p_z(z_q, head=head, use_mixw_cor=use_mixw_cor)
         log_q_z = log_Normal_diag(z_q, z_q_mean, z_q_logvar, dim=1)
         KL = -(log_p_z - log_q_z)
 
@@ -450,7 +450,7 @@ class VAE(Model):
         return x_mean, x_logvar
 
     # the prior
-    def log_p_z(self, z, mu=None, logvar=None, head=0):
+    def log_p_z(self, z, mu=None, logvar=None, head=0, use_mixw_cor=False):
         if self.args.prior == 'standard':
             log_prior = log_Normal_standard(z, dim=1)
 
@@ -501,7 +501,9 @@ class VAE(Model):
 
             # havent yet implemented dealing with mixing weights in the separated means case
             if self.args.use_vampmixingw:
-                pis = self.mixingw(eye).t()
+                pis = self.mixingw(eye).t() 
+                if use_mixw_cor: 
+                    pis = pis * torch.from_numpy(self.mixingw_c).cuda().unsqueeze(0) 
                 eps = 1e-30
                 a = log_Normal_diag(z_expand, means, logvars, dim=2) + torch.log(pis)  # MB x C
             else:

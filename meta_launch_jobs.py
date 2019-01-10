@@ -19,7 +19,7 @@ VAMP_MIX = [1]
 DYNAMIC_BINARIZATION = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(10, 15)
+    PERM_RANGE = range(0, 5)
 else: 
     PERM_RANGE = range(5, 10)
 
