@@ -251,7 +251,7 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
                      optimizer_cls=None, dg=0):
 
     # start training
-    EP = 25 
+    EP = args.classifier_EP
     for ep in range(EP):
         for batch_idx, (data, target) in enumerate(it.islice(train_loader, 0, None)):
             if args.cuda:

@@ -88,15 +88,16 @@ parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar
                     help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
 parser.add_argument('--permindex', type=int, default=1, 
                     help='permutation index, integer in [0, 1000)' )
-parser.add_argument('--num_classes', type=int, default=10, help='number of classes')
 parser.add_argument('--dynamic_binarization', type=int, default=0,
                     help='allow dynamic binarization, {0, 1}')
+parser.add_argument('--num_classes', type=int, default=10, help='number of classes')
 
 # replay parameters
 parser.add_argument('--replay_size', type=str, default='constant', help='constant, increase')
 
 parser.add_argument('--replay_type', type=str, default='replay', help='replay, prototype') 
 parser.add_argument('--add_cap', type=int, default=0, help='0, 1')
+parser.add_argument('--classifier_EP ', type=int, default='75', help='number of iterations for classifier training')
 
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
@@ -197,10 +198,11 @@ for dg in range(0, 10):
     print('starting task {}'.format(dg))
     print('________________________\n')
 
-    train_loader = ut.get_mnist_loaders([dg], 'train', arguments)
-    val_loader = ut.get_mnist_loaders(list(range(dg+1)), 'validation', arguments)
-    test_loader = ut.get_mnist_loaders(list(range(dg+1)), 'test', arguments)
 
+    train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments)
+    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments)
+    test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments)
+    
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
 

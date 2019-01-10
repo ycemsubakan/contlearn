@@ -25,4 +25,4 @@ arangemat[0] = torch.arange(T)
 
 print(arangemat[:10])
 
-torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + hostname + '_' + timestamp + '.t')
+#torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + hostname + '_' + timestamp + '.t')
