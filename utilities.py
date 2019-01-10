@@ -421,9 +421,34 @@ def separate_mnist(loader, dataset_type):
         os.mkdir(folder)
     torch.save(datasets, folder + dataset_type + '.t' ) 
 
-def get_mnist_loaders(digits, dataset_type, arguments):
+def separate_omniglot(loader, dataset_type):
+    fts = []
+    labels = []
+    for i, (ft, tar) in enumerate(loader):   
+        fts.append(ft)
+        labels.append(tar)
+    
+    all_fts = torch.cat(fts, dim=0)
+    all_labels = torch.cat(labels, dim=0)
 
-    sets = torch.load('mnist_files/' + dataset_type +  '.t')
+    datasets = [] 
+    for lb in range(55):
+        mask = torch.eq(all_labels, lb)
+        inds = torch.nonzero(mask).squeeze()
+        dt = torch.index_select(all_fts, dim=0, index=inds)
+        lbls = torch.index_select(all_labels, dim=0, index=inds)
+
+        datasets.append(data_utils.TensorDataset(dt, lbls))
+
+    folder = 'omniglot_files/'
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+    torch.save(datasets, folder + dataset_type + '.t' ) 
+
+
+def get_mnist_loaders(digits, dataset_type, arguments, path = 'mnist_files/'):
+
+    sets = torch.load(path + dataset_type +  '.t')
     dataset = data_utils.ConcatDataset([sets[dg] for dg in digits])
     
     kwargs = {'num_workers': 1, 'pin_memory': True} if arguments.cuda else {}

@@ -262,7 +262,7 @@ class VAE(Model):
 
         return loss, RE, KL, x_mean
 
-    def calculate_likelihood(self, X, dir, mode='test', S=5000, MB=100):
+    def calculate_likelihood(self, X, dir, mode='test', S=5000, MB=100, use_mixw_cor=False):
         # set auxiliary variables for number of training and test sets
         N_test = X.size(0)
 
@@ -289,7 +289,7 @@ class VAE(Model):
                 else:
                     x = x_single.expand(S, x_single.size(1))
 
-                a_tmp, _, _, _ = self.calculate_loss(x)
+                a_tmp, _, _, _ = self.calculate_loss(x, use_mixw_cor=use_mixw_cor)
 
                 a.append( -a_tmp.cpu().data.numpy() )
 
@@ -305,7 +305,7 @@ class VAE(Model):
 
         return -np.mean(likelihood_test)
 
-    def calculate_lower_bound(self, X_full, MB=100):
+    def calculate_lower_bound(self, X_full, MB=100, use_mixw_cor=False):
         # CALCULATE LOWER BOUND:
         lower_bound = 0.
         RE_all = 0.
@@ -324,7 +324,7 @@ class VAE(Model):
             else:
                 x = X_full[i * MB: (i + 1) * MB]
 
-            loss, RE, KL, _ = self.calculate_loss(x,average=True)
+            loss, RE, KL, _ = self.calculate_loss(x,average=True, use_mixw_cor=use_mixw_cor)
 
             RE_all += RE.cpu().data[0]
             KL_all += KL.cpu().data[0]

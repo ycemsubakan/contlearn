@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import copy
 
-path = 'select_files/'
+path = 'select_files3/'
 files = os.listdir(path)
 
 filesf = []
@@ -14,7 +14,6 @@ priors = ['vampprior_short', 'standard']
 replays = ['replay_size_increase', 'replay_size_constant']
 mixingw_cor = ['use_mixingw_correction_0', 'use_mixingw_correction_1']
 cost_cor = ['costcorrection_0', 'costcorrection_1']
-
 
 models = [] 
 
@@ -54,8 +53,8 @@ for i, mdl in enumerate(models):
     NC = 0
     for fl in mdl:
         results = pickle.load(open(path + fl, 'rb'))
-        temp1 = [res['class'] for res in results]
-        if (len(temp1) == T) and ('permutation_0' in fl):
+        temp1 = [res['test_ll'] for res in results]
+        if (len(temp1) == T): #and ('permutation_4' in fl): #and ('permutation_4' not in fl) and ('permutation_0' not in fl):
             test_lls.append(temp1)
             NC = NC + 1
     test_lls = np.array(test_lls)
@@ -71,7 +70,7 @@ for i, mdl in enumerate(models):
     for pc in parts['bodies']:
         pc.set_facecolor(colors[i])
         pc.set_edgecolor(colors[i])
-        #pc.set_alpha(1)
+        pc.set_alpha(1)
 
         #plt.subplot(122)
         #plt.plot(np.arange(len(test_cls)), test_cls, '-' + colors[i] + markers[i], label=lbl)
