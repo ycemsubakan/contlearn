@@ -256,10 +256,12 @@ for dg in range(0, 10):
                                    optimizer, dr, arguments.model_name, prev_model=prev_model, 
                                    dg=dg, perm=perm) 
         t2 = time.time()
-        # also add number of iterations here 
 
-    if arguments.use_classifier and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
-        yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
+    if (arguments.use_classifier or arguments.semi_sup) and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
+        if arguments.use_classifier:
+            yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
+        if arguments.semi_sup:
+            yhat_means = model.balance_mixingw(dg=dg, perm=perm)
         if arguments.use_visdom:
             means = model.reconstruct_means()
             opts = {}
