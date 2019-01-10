@@ -298,29 +298,37 @@ def load_omniglot(args, n_validation=1345, **kwargs):
     omni_raw = loadmat(os.path.join('datasets', 'OMNIGLOT', 'chardata.mat'))
 
     # train and test data
-    train_data = reshape_data(omni_raw['data'].T.astype('float32'))
+    train_ft = reshape_data(omni_raw['data'].T.astype('float32'))
+    train_tar = omni_raw['targetchar'].squeeze() - 1
+
     x_test = reshape_data(omni_raw['testdata'].T.astype('float32'))
+    y_test = omni_raw['testtargetchar'].squeeze() - 1
 
     # shuffle train data
-    np.random.shuffle(train_data)
+    np.random.seed(777)
+    np.random.shuffle(train_ft)
+    np.random.shuffle(train_tar)
 
     # set train and validation data
-    x_train = train_data[:-n_validation]
-    x_val = train_data[-n_validation:]
+    x_train = train_ft[:-n_validation]
+    x_val = train_ft[-n_validation:]
+
+    y_train = train_tar[:-n_validation] 
+    y_val = train_tar[-n_validation:] 
 
     # binarize
     if args.dynamic_binarization:
         args.input_type = 'binary'
-        np.random.seed(777)
         x_val = np.random.binomial(1, x_val)
         x_test = np.random.binomial(1, x_test)
     else:
-        args.input_type = 'gray'
+        raise 'we want binary data!'
+        # args.input_type = 'gray'
 
     # idle y's
-    y_train = np.zeros( (x_train.shape[0], 1) )
-    y_val = np.zeros( (x_val.shape[0], 1) )
-    y_test = np.zeros( (x_test.shape[0], 1) )
+    #y_train = omni_raw['targetchar']
+    #y_val = np.zeros( (x_val.shape[0], 1) )
+    #y_test = np.zeros( (x_test.shape[0], 1) )
 
     # pytorch data loader
     train = data_utils.TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))

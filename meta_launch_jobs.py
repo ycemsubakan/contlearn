@@ -19,7 +19,7 @@ VAMP_MIX = [1]
 DYNAMIC_BINARIZATION = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(0, 5)
+    PERM_RANGE = range(5, 10)
 else: 
     PERM_RANGE = range(5, 10)
 
@@ -53,7 +53,8 @@ for prior in PRIORS:
                         --use_mixingw_correction %(rebalance)s \
                         --dynamic_binarization %(db)s \
                         --permindex %(permid)s \
-                        --use_replaycostcorrection %(costc)s" % locals()
+                        --use_replaycostcorrection %(costc)s \
+                        --notes llcorb2" % locals()
                 
                         print(command)
                 

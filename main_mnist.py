@@ -146,14 +146,27 @@ if not os.path.exists(results_path):
 
 # LOAD DATA
 print('load data')
-if not os.path.exists('mnist_files'):
-    train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-    ut.separate_mnist(train_loader, 'train')
-    ut.separate_mnist(val_loader, 'validation')
-    ut.separate_mnist(test_loader, 'test')
+
+# Dataset preparation
+if arguments.dataset_name == 'dynamic_mnist':
+    if not os.path.exists('mnist_files'):
+        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+        ut.separate_mnist(train_loader, 'train')
+        ut.separate_mnist(val_loader, 'validation')
+        ut.separate_mnist(test_loader, 'test')
+elif arguments.dataset_name == 'omniglot':
+    if not os.path.exists('omniglot_files'):
+        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+        ut.separate_omniglot(train_loader, 'train')
+        ut.separate_omniglot(val_loader, 'validation')
+        ut.separate_omniglot(test_loader, 'test')
+
+#train_loader = ut.get_mnist_loaders([2], 'train', arguments, path='omniglot_files/')
 
 #dt = next(iter(train_loader))
-#vis.images(dt[0].reshape(-1, 1, 28, 28), win='data')
+#vis.images(dt[0].reshape(-1, 1, 28, 28))
+
+#pdb.set_trace()
 
 # importing model
 if arguments.model_name == 'vae':
@@ -241,7 +254,7 @@ for dg in range(0, 10):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if 0 & os.path.exists(model_path):
+    if arguments.debug and os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
