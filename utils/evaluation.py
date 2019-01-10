@@ -168,7 +168,7 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
-                 prev_model=None):
+                 prev_model=None, use_mixw_cor=False):
     
     # set loss to 0
     evaluate_loss = 0
@@ -201,7 +201,7 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         if args.semi_sup:
             loss, RE, KL, CE, _ = model.calculate_loss(x.reshape(x.size(0), -1), target, average=True)
         else:
-            loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0)
+            loss, RE, KL, _ = model.calculate_loss(x.reshape(x.size(0), -1), average=True, head=0, use_mixw_cor=use_mixw_cor)
 
         evaluate_loss += loss.item() 
         evaluate_re += -RE.item()
