@@ -158,27 +158,46 @@ class SSVAE(Model):
 
         return recons 
 
-    def balance_mixingw(self, classifier, dg, vis=None):
+    def balance_mixingw(self, dg, perm, vis=None):
 
         # not done yet!
-        pdb.set_trace()
-    
-        means = self.reconstruct_means()
-        yhat_means = torch.argmax(classifier.forward(means), dim=1)
+        #pdb.set_trace()
+     
+        # get means
+        K = self.means.linear.weight.size(1)
+        eye = torch.eye(K, K).cuda() 
+        X = self.means(eye)
+        z_mean = self.q_z_mean(X)
+        y_hat_means = self.semi_supervisor(z_mean)
+        
+        pis = self.mixingw(self.idle_input).squeeze()
+        curr_per_class_weight = torch.matmul(pis, y_hat_means)
+
+        print('\ncurrent per class cluster assignment:')
+        print(curr_per_class_weight.detach().cpu().numpy())
 
         mixingw_c = torch.zeros(self.args.number_components, 1).squeeze().cuda()
-        ones = torch.ones(self.args.number_components).squeeze().cuda()
+        per_class_scaling = torch.zeros(self.args.num_classes).cuda()
+        #ones = torch.ones(self.args.number_components).squeeze().cuda()
+        # for loop to compute the per_class rescaling:
         for d in range(dg+1):
-            mask = (yhat_means == d)
-            pis = self.mixingw(self.idle_input).squeeze()
-            pis_select = torch.masked_select(pis, mask)
-            sm = pis_select.sum()
+            idx = perm[d].long()
+            per_class_scaling[idx] = 1 / curr_per_class_weight[idx] / (dg+1)
+            #mask = (yhat_means == d)
+            #pis = self.mixingw(self.idle_input).squeeze()
+            #pis_select = torch.masked_select(pis, mask)
+            #sm = pis_select.sum()
 
-            # correct the mixing weights 
-            mixingw_c = mixingw_c + ones*(mask.float())/(sm*(dg+1))
+            ## correct the mixing weights 
+            #mixingw_c = mixingw_c + ones*(mask.float())/(sm*(dg+1))
+        self.mixingw_c = torch.matmul(y_hat_means, per_class_scaling).detach().cpu().numpy()
 
-        self.mixingw_c = mixingw_c.data.cpu().numpy()
-        return yhat_means
+        print('\nrebalanced per class cluster assignment:')
+        post_per_class_weight = torch.matmul(self.mixingw_c*pis, y_hat_means)
+        print(post_per_class_weight.detach().cpu().numpy())
+
+        #self.mixingw_c = mixingw_c.data.cpu().numpy()
+        return y_hat_means
 
     def calculate_loss(self, x, y=None, beta=1., average=False, head=None):
         '''
@@ -220,10 +239,7 @@ class SSVAE(Model):
         
         # CE
         if len(y.shape)==1:
-            try:
-                CE =  F.nll_loss(torch.log(y_hat), y)
-            except:
-                pdb.set_trace()
+            CE =  F.nll_loss(torch.log(y_hat), y)
         else:
             CE = - (y * torch.log(y_hat)).mean()
         
@@ -371,7 +387,7 @@ class SSVAE(Model):
                 pis = torch.ones(self.args.number_components) / self.args.number_components
             
             if self.args.use_mixingw_correction and replay:
-                pis = torch.from_numpy(self.mixingw_c).cuda() * pis
+                pis = torch.from_numpy(self.mixingw_c).type(torch.cuda.FloatTensor) * pis
 
             clsts = np.random.choice(range(self.args.number_components), N, 
                                      p=pis.data.cpu().numpy())

@@ -19,9 +19,6 @@ vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem
 #assert vis.check_connection()
 
 
-
-
-
 def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader, 
                              model, optimizer, dr, model_name='vae', prev_model=None):
     from utils.evaluation import evaluate_vae as evaluate
@@ -87,7 +84,7 @@ def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader,
         if val_loss_epoch < best_loss:
             e = 0
             best_loss = val_loss_epoch
-            if not args.debug:
+            if not arguments.debug:
                 print('model saved')
                 torch.save(model.state_dict(), dr + '.model')
         else:
@@ -201,6 +198,7 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         if arguments.semi_sup: val_ce_history.append(val_results['test_ce'])
 
         # printing results
+        print('task number {}'.format(dg)) 
         if arguments.semi_sup:
             print('Epoch: {}/{}, Time elapsed: {}s\n'
               '* Train loss: {}   (RE: {}, KL: {}, CE: {})\n'
@@ -229,9 +227,9 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         if val_results['test_loss'] < best_loss:
             e = 0
             best_loss = val_results['test_loss']
-            # best_model = model
-            print('model saved')
-            torch.save(model.state_dict(), dr + '.model')
+            if not arguments.debug:
+                print('model saved')
+                torch.save(model.state_dict(), dr + '.model')
         else:
             e += 1
             if epoch < arguments.warmup:
@@ -371,8 +369,10 @@ def train_vae(epoch, args, train_loader, model,
         elif not args.separate_means  and (dg > 0) and (args.replay_size == 'constant'):
             
             if args.semi_sup:
-                loss1, RE1, KL1, CE1, _ = model.calculate_loss(x_replay, y_replay, beta=beta, average=True, head=0)
-                loss2, RE2, KL2, CE2, _ = model.calculate_loss(x, target, beta=beta, average=True, head=0)
+                loss1, RE1, KL1, CE1, _ = model.calculate_loss(x_replay, y_replay,  
+                        beta=beta, average=True, head=0)
+                loss2, RE2, KL2, CE2, _ = model.calculate_loss(x, target, 
+                        beta=beta, average=True, head=0)
 
                 if args.use_replaycostcorrection:
                     loss = (dg)*loss1 + loss2

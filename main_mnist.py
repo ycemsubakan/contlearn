@@ -273,7 +273,7 @@ for dg in range(0, 10):
     if (arguments.use_classifier or arguments.semi_sup) and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
         if arguments.use_classifier:
             yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
-        if arguments.semi_sup:
+        if arguments.semi_sup and dg>0:
             yhat_means = model.balance_mixingw(dg=dg, perm=perm)
         if arguments.use_visdom:
             means = model.reconstruct_means()
