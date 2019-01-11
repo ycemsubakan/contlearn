@@ -48,7 +48,7 @@ legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 plt.figure(figsize=[20, 10], dpi=100)
 T = 10
 
-all_means = []
+all_ll_means = []
 for i, mdl in enumerate(models): 
     test_lls = []
     test_cls = []
@@ -65,6 +65,7 @@ for i, mdl in enumerate(models):
     test_lls = np.array(test_lls)
     test_cls = np.array(test_cls)
 
+    all_ll_means.append(test_lls.mean(0))
     
     #test_cls = [res['class'] for res in results]
     
@@ -99,5 +100,32 @@ plt.ylabel('Test Average Classification Accuracy')
 
 plt.xticks(range(10), range(10))
 
-plt.show()
+#plt.show()
     #plt.savefig('Figure_contlearn.png')
+
+plt.figure()
+#second figure
+all_ll_means_max = np.array(all_ll_means).max(0)
+
+
+for i, mdl in enumerate(models): 
+    test_lls = []
+    test_cls = []
+
+    NC = 0
+    for fl in mdl:
+        results = pickle.load(open(path + fl, 'rb'))
+        temp1 = [res['test_ll'] for res in results]
+        if (len(temp1) == T): #and ('permutation_1' in fl): #and ('permutation_4' not in fl) and ('permutation_0' not in fl):
+            test_lls.append(temp1)
+            NC = NC + 1
+    test_lls = np.array(test_lls)
+
+    lbl = copy.deepcopy(fl)
+    lbl = lbl.replace('_wu100_z1_40_z2_40', ' ').replace('replay_size', ' ').replace('add_cap_0_usevampmixingw_1_separate_means_0_useclassifier_1', ' ').replace('dynamic_mnist_permutation', ' ')
+    if len(test_lls) > 0:
+        plt.plot(np.arange(T), test_lls.mean(0)/all_ll_means_max, '-' + colors[i] + markers[i], label=lbl + 'NC' + str(NC))
+
+plt.legend()
+plt.show()
+ 

@@ -219,6 +219,18 @@ class VAE(Model):
         self.mixingw_c = mixingw_c.data.cpu().numpy()
         return yhat_means
 
+    def compute_class_entropy(self, classifier, dg):
+        means = self.reconstruct_means()
+        yhat_means = classifier.forward(means) # needs softmax 
+
+        pis = self.mixingw(self.idle_input)
+        pdb.set_trace()
+
+        ws = torch.matmul(yhat_means, pis) 
+        return ent(ws[perm[:dg+1]])
+
+
+
 
     def calculate_loss(self, x, beta=1., average=False, head=0, use_mixw_cor=False):
         '''

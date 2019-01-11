@@ -409,6 +409,9 @@ def train_vae(epoch, args, train_loader, model,
             
             loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
+
+        if 1 and (dg > 0):
+            model.compute_class_entropy(classifier, dg)
         
         if batch_idx % 300 == 0:
             print('batch {}, loss {}'.format(batch_idx, loss))
