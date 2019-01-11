@@ -149,24 +149,33 @@ print('load data')
 
 # Dataset preparation
 if arguments.dataset_name == 'dynamic_mnist':
+    Lclass = 10
+    datapath = 'mnist_files/'
     if not os.path.exists('mnist_files'):
         train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
         ut.separate_mnist(train_loader, 'train')
         ut.separate_mnist(val_loader, 'validation')
         ut.separate_mnist(test_loader, 'test')
 elif arguments.dataset_name == 'omniglot':
+    Lclass = 50
+    datapath = 'omniglot_files/'
     if not os.path.exists('omniglot_files'):
         train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
         ut.separate_omniglot(train_loader, 'train')
         ut.separate_omniglot(val_loader, 'validation')
         ut.separate_omniglot(test_loader, 'test')
 
-#train_loader = ut.get_mnist_loaders([2], 'train', arguments, path='omniglot_files/')
 
+#C = 29 
+#train_loader = ut.get_mnist_loaders([C], 'train', arguments, path='omniglot_files/')
+#test_loader = ut.get_mnist_loaders([C], 'test', arguments, path='omniglot_files/')
+#
+#
 #dt = next(iter(train_loader))
 #vis.images(dt[0].reshape(-1, 1, 28, 28))
-
-#pdb.set_trace()
+##
+#dt = next(iter(test_loader))
+#vis.images(dt[0].reshape(-1, 1, 28, 28))
 
 # importing model
 if arguments.model_name == 'vae':
@@ -214,26 +223,30 @@ results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
 
 # load the permutations
-permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+if arguments.dataset_name == 'mnist':
+    permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+elif arguments.dataset_name == 'omniglot':
+    permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
+
 perm = permutations[arguments.permindex]
 
 model = VAE(arguments).cuda()
 if arguments.use_classifier:
-    classifier = cls(arguments, 100, 784).cuda()
+    classifier = cls(arguments, 100, 784, Lclass=Lclass).cuda()
 else: 
     classifier = None
 
 # implement proper sampling with vamp, learn the weights too.  
-for dg in range(0, 10):
+for dg in range(0, Lclass):
 
     print('\n________________________')
     print('starting task {}'.format(dg))
     print('________________________\n')
 
-
-    train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments)
-    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments)
-    test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments)
+    train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments, 
+                                        path=datapath)
+    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments, path=datapath)
+    test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments, path=datapath)
     
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
@@ -290,7 +303,8 @@ for dg in range(0, 10):
     if 1: 
         results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction)
         results['digit'] = dg
-        if arguments.use_classifier: results['class'] = acc.item()
+        if arguments.use_classifier: 
+            results['class'] = acc.item()
         results['time'] = t2 - t1
         results['epochs'] = EPconv
         all_results.append(results)
@@ -311,7 +325,7 @@ for dg in range(0, 10):
     
 
     # little questionable 
-    if arguments.add_cap and (dg < 9) and (arguments.prior != 'standard'):
+    if arguments.add_cap and (dg < (Lclass - 1)) and (arguments.prior != 'standard'):
         model.add_latent_cap(dg)
     else:
         model.restart_latent_space()

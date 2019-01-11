@@ -8,9 +8,11 @@ import socket
 timestamp = str(datetime.datetime.now()).replace(' ','')
 hostname = socket.gethostname()
 
-dataset = 'mnist'
+dataset = 'omniglot'
 if dataset == 'mnist':
     T = 10 
+elif dataset == 'omniglot':
+    T = 50
 Nperms = 1000
 
 seed = 2
@@ -25,4 +27,4 @@ arangemat[0] = torch.arange(T)
 
 print(arangemat[:10])
 
-#torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + hostname + '_' + timestamp + '.t')
+torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + hostname + '_' + timestamp + '.t')

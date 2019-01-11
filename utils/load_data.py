@@ -286,7 +286,7 @@ def load_dynamic_mnist(args, **kwargs):
     return train_loader, val_loader, test_loader, args
 
 # ======================================================================================================================
-def load_omniglot(args, n_validation=1345, **kwargs):
+def load_omniglot(args, n_validation=4000, **kwargs):
     # set args
     args.input_size = [1, 28, 28]
     args.input_type = 'binary'
@@ -299,15 +299,20 @@ def load_omniglot(args, n_validation=1345, **kwargs):
 
     # train and test data
     train_ft = reshape_data(omni_raw['data'].T.astype('float32'))
-    train_tar = omni_raw['targetchar'].squeeze() - 1
+    #train_tar = omni_raw['targetchar'].squeeze() - 1
+    train_tar = omni_raw['target'].argmax(0)
 
     x_test = reshape_data(omni_raw['testdata'].T.astype('float32'))
-    y_test = omni_raw['testtargetchar'].squeeze() - 1
+    #y_test = omni_raw['testtargetchar'].squeeze() - 1
+    y_test = omni_raw['testtarget'].argmax(0)
 
     # shuffle train data
-    np.random.seed(777)
-    np.random.shuffle(train_ft)
-    np.random.shuffle(train_tar)
+    randperm = np.random.permutation(train_ft.shape[0])
+    train_ft = train_ft[randperm]
+    train_tar = train_tar[randperm]
+
+    #np.random.shuffle(train_ft)
+    #np.random.shuffle(train_tar)
 
     # set train and validation data
     x_train = train_ft[:-n_validation]
@@ -318,6 +323,7 @@ def load_omniglot(args, n_validation=1345, **kwargs):
 
     # binarize
     if args.dynamic_binarization:
+        np.random.seed(777)
         args.input_type = 'binary'
         x_val = np.random.binomial(1, x_val)
         x_test = np.random.binomial(1, x_test)
