@@ -342,8 +342,8 @@ def train_vae(epoch, args, train_loader, model,
                 data = torch.cat([data, x_replay.data], dim=0)
                 if args.semi_sup:
                     target = torch.cat([target, y_replay], dim=0)
-
-        
+    
+       
         #if len(data.shape) > 2:
         #    data = data.reshape(data.size(0), -1)
         # dynamic binarization
@@ -410,8 +410,8 @@ def train_vae(epoch, args, train_loader, model,
             loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
 
-        if 1 and (dg > 0):
-            model.compute_class_entropy(classifier, dg)
+        if 0 and (dg > 0):
+            model.compute_class_entropy(classifier, dg, perm=perm)
         
         if batch_idx % 300 == 0:
             print('batch {}, loss {}'.format(batch_idx, loss))
@@ -445,6 +445,9 @@ def train_vae(epoch, args, train_loader, model,
     if args.semi_sup:
         train_ce /= len(train_loader)
         train_results['train_ce'] = train_ce
+
+    if args.use_visdom:
+        vis.images(data.reshape(-1, args.input_size[0], args.input_size[1], args.input_size[2]))
          
     return model, train_results
 

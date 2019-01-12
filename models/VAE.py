@@ -219,14 +219,20 @@ class VAE(Model):
         self.mixingw_c = mixingw_c.data.cpu().numpy()
         return yhat_means
 
-    def compute_class_entropy(self, classifier, dg):
+    def compute_class_entropy(self, classifier, dg, perm):
         means = self.reconstruct_means()
-        yhat_means = classifier.forward(means) # needs softmax 
+        yhat_means = F.softmax(classifier.forward(means), dim=1) # needs softmax 
 
         pis = self.mixingw(self.idle_input)
-        pdb.set_trace()
 
-        ws = torch.matmul(yhat_means, pis) 
+        ws = torch.matmul(yhat_means.t(), pis).squeeze()
+
+        dist = ws[perm[:(dg+1)]]
+
+        pdb.set_trace()
+        eps = 1e-30
+        nent = (dist * torch.log(dist + eps)).sum()
+
         return ent(ws[perm[:dg+1]])
 
 

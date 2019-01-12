@@ -280,7 +280,7 @@ for dg in range(0, Lclass):
         t1 = time.time()
         EPconv = tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                                    optimizer, dr, arguments.model_name, prev_model=prev_model, 
-                                   dg=dg, perm=perm) 
+                                   dg=dg, perm=perm, classifier=classifier) 
         t2 = time.time()
         # also add number of iterations here 
 
