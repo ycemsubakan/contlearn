@@ -21,17 +21,17 @@ DYNAMIC_BINARIZATION = [1]
 LAMBDA = [5]
 
 if host == 'cedar':
-    PERM_RANGE = range(0, 5)
+    PERM_RANGE = range(1, 5)
 else: 
     PERM_RANGE = range(5, 10)
     
 #!!!!!1
-PERM_RANGE = [1]
+#PERM_RANGE = [0]
 
 # dopnt iterate through them now
 add_cap = ADD_CAP[0]
 vamp_mix = VAMP_MIX[0]
-Lambda = VAMP_MIX[0]
+Lambda = LAMBDA[0]
 
 
 for prior in PRIORS:

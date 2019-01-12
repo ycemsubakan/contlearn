@@ -291,6 +291,8 @@ for dg in range(0, Lclass):
                                    dg=dg, perm=perm) 
         t2 = time.time()
 
+    # rebalancing:
+    prior_class_ass = post_class_ass = -1
     if (arguments.use_classifier or arguments.semi_sup) and (arguments.prior != 'standard'):
         if arguments.use_mixingw_correction:  
             if arguments.use_classifier:
@@ -310,8 +312,6 @@ for dg in range(0, Lclass):
             if arguments.semi_sup: 
                 _, prior_class_ass = model.balance_mixingw(dg=dg, perm=perm, dont_balance=True)
             post_class_ass = prior_class_ass
-    else:
-        prior_class_ass = post_class_ass = -1
                     
     if (dg > 0) and arguments.separate_means:
         model.merge_latent()

@@ -339,7 +339,9 @@ def train_vae(epoch, args, train_loader, model,
             if args.replay_size == 'increase': 
                 data = torch.cat([data, x_replay.data], dim=0)
                 if args.semi_sup:
-                    target = torch.cat([target, y_replay], dim=0)
+                    y_onehot = torch.cuda.FloatTensor(target.shape[0], args.num_classes) * 0
+                    y_onehot.scatter_(1, target.view(-1,1), 1)
+                    target = torch.cat([y_onehot, y_replay], dim=0)
 
         
         #if len(data.shape) > 2:
