@@ -257,13 +257,13 @@ class VAE(Model):
 
     def compute_class_entropy(self, classifier, dg, perm):
         means = self.reconstruct_means()
-        yhat_means = F.softmax(classifier.forward(means), dim=1) # needs softmax 
+        yhat_means = F.softmax(classifier.forward(means), dim=1) 
 
         pis = self.mixingw(self.idle_input)
 
         ws = torch.matmul(yhat_means.t(), pis).squeeze()
 
-        dist = ws[perm[:(dg+1)]]
+        dist = ws[perm[:(dg+1)].long()]
 
         pdb.set_trace()
         eps = 1e-30
