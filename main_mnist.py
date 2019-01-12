@@ -124,10 +124,6 @@ arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
-if arguments.cuda:
-    model = model.cuda()
-    if arguments.use_classifier:
-        classifier = classifier.cuda()
 if arguments.use_visdom:
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
