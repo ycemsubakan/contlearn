@@ -251,7 +251,7 @@ class VAE(Model):
         print('\npost per class cluster assignment:')
         print(np.round(post_per_class_weight,2))
         print('\n')
-       
+        
         self.mixingw_c = mixingw_c.data.cpu().numpy()
         return yhat_means, curr_per_class_weight, post_per_class_weight
 
