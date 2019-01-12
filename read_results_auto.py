@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import copy
 
-path = 'select_files3/'
+path = 'results_massimo/'
 files = os.listdir(path)
 
 filesf = []
@@ -57,7 +57,11 @@ for i, mdl in enumerate(models):
     for fl in mdl:
         results = pickle.load(open(path + fl, 'rb'))
         temp1 = [res['test_ll'] for res in results]
-        temp2 = [res['class'] for res in results]
+        try:
+            temp2 = [res['class'] for res in results]
+        except:
+            temp2 = [res['test_acc'] for res in results]
+
         if (len(temp1) == T): #and ('permutation_1' in fl): #and ('permutation_4' not in fl) and ('permutation_0' not in fl):
             test_lls.append(temp1)
             test_cls.append(temp2)
