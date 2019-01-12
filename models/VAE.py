@@ -182,12 +182,15 @@ class VAE(Model):
     def reconstruct_means(self, head=0):
         if self.args.separate_means:
             K = self.means[head].linear.weight.size(1)
-            eye = torch.eye(K, K).cuda()
-
+            eye = torch.eye(K, K)
+            if self.args.cuda:
+                eye = eye.cuda()
             X = self.means[head](eye)
         else: 
             K = self.means.linear.weight.size(1)
-            eye = torch.eye(K, K).cuda()
+            eye = torch.eye(K, K)
+            if self.args.cuda:
+                eye = eye.cuda()
 
             X = self.means(eye)
         z_mean = self.q_z_mean(X)
@@ -196,16 +199,38 @@ class VAE(Model):
 
         return recons 
 
-    def balance_mixingw(self, classifier, dg, perm=torch.arange(10), vis=None):
+    def balance_mixingw(self, classifier, dg, perm=torch.arange(10), dont_balance=False, vis=None):
         # functions that are related: 
         # training.train_classifier
         # evaluate.
 
         means = self.reconstruct_means()
+        yhat_means_soft = F.softmax(classifier.forward(means))
+        pis = self.mixingw(self.idle_input).squeeze()
+        
+        curr_per_class_weight = torch.matmul(pis, yhat_means_soft)
+        
         yhat_means = torch.argmax(classifier.forward(means), dim=1)
+        
+        # to numpy:
+        if self.args.cuda:
+            curr_per_class_weight = curr_per_class_weight.detach().cpu().numpy()
+        else:
+            curr_per_class_weight = curr_per_class_weight.detach().numpy()
 
-        mixingw_c = torch.zeros(self.args.number_components, 1).squeeze().cuda()
-        ones = torch.ones(self.args.number_components).squeeze().cuda()
+        print('\ncurrent per class cluster assignment:')
+        print(np.round(curr_per_class_weight,2))
+        print('\n')
+       
+        if dont_balance:
+            return yhat_means, curr_per_class_weight
+
+        mixingw_c = torch.zeros(self.args.number_components, 1).squeeze()
+        ones = torch.ones(self.args.number_components).squeeze()
+
+        if self.args.cuda:
+            mixingw_c = mixingw_c.cuda()
+            ones = ones.cuda()
 
         for d in perm[:(dg+1)]:
             mask = (yhat_means == int(d.item()))
@@ -215,9 +240,20 @@ class VAE(Model):
 
             # correct the mixing weights 
             mixingw_c = mixingw_c + ones*(mask.float())/(sm*(dg+1))
+       
+        post_per_class_weight = torch.matmul(mixingw_c*pis, yhat_means_soft)
+        
+        if self.args.cuda:
+            post_per_class_weight = post_per_class_weight.detach().cpu().numpy()
+        else:
+            post_per_class_weight = post_per_class_weight.detach().numpy()
 
+        print('\npost per class cluster assignment:')
+        print(np.round(post_per_class_weight,2))
+        print('\n')
+        
         self.mixingw_c = mixingw_c.data.cpu().numpy()
-        return yhat_means
+        return yhat_means, curr_per_class_weight, post_per_class_weight
 
     def compute_class_entropy(self, classifier, dg, perm):
         means = self.reconstruct_means()
@@ -383,7 +419,10 @@ class VAE(Model):
                 pis = torch.ones(self.args.number_components) / self.args.number_components
             
             if self.args.use_mixingw_correction and replay:
-                pis = torch.from_numpy(self.mixingw_c).cuda() * pis
+                if self.args.cuda:
+                    pis = torch.from_numpy(self.mixingw_c).cuda() * pis
+                else:
+                    pis = torch.from_numpy(self.mixingw_c) * pis
 
             clsts = np.random.choice(range(self.args.number_components), N, 
                                      p=pis.data.cpu().numpy())
@@ -395,7 +434,9 @@ class VAE(Model):
                 means = self.means[0](eye)[clsts, :]
             else: 
                 K = self.means.linear.weight.size(1)
-                eye = torch.eye(K, K).cuda()
+                eye = torch.eye(K, K)
+                if self.args.cuda:
+                    eye = eye.cuda()
 
                 means = self.means(eye)[clsts, :]
 
@@ -500,12 +541,16 @@ class VAE(Model):
             # calculate params
             if self.args.separate_means:
                 K = self.means[head].linear.weight.size(1)
-                eye = torch.eye(K, K).cuda()
+                eye = torch.eye(K, K)
+                if self.args.cuda:
+                    eye = eye.cuda()
 
                 X = self.means[head](eye)
             else: 
                 K = self.means.linear.weight.size(1)
-                eye = torch.eye(K, K).cuda()
+                eye = torch.eye(K, K)
+                if self.args.cuda:
+                    eye = eye.cuda()
 
                 X = self.means(eye)
 
@@ -521,7 +566,10 @@ class VAE(Model):
             if self.args.use_vampmixingw:
                 pis = self.mixingw(eye).t() 
                 if use_mixw_cor: 
-                    pis = pis * torch.from_numpy(self.mixingw_c).cuda().unsqueeze(0) 
+                    if self.args.cuda:
+                        pis = pis * torch.from_numpy(self.mixingw_c).cuda().unsqueeze(0) 
+                    else:
+                        pis = pis * torch.from_numpy(self.mixingw_c).unsqueeze(0) 
                 eps = 1e-30
                 a = log_Normal_diag(z_expand, means, logvars, dim=2) + torch.log(pis)  # MB x C
             else:
@@ -616,7 +664,6 @@ class VAE(Model):
 
         self.Kmog = self.pis.size(0)
         self.args.prior = 'GMM'
-
 
 class classifier(nn.Module):
     def __init__(self, args, K, L, Lclass=10):
