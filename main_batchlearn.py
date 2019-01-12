@@ -114,9 +114,28 @@ if not os.path.exists(results_path):
 # LOAD DATA
 print('load data')
 #train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-train_loader = ut.get_mnist_loaders(list(range(10)), 'train', arguments)
-val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments)
-test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments)
+
+if arguments.dataset_name == 'dynamic_mnist':
+    Lclass = 10
+    datapath = 'mnist_files/'
+    if not os.path.exists('mnist_files'):
+        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+        ut.separate_mnist(train_loader, 'train')
+        ut.separate_mnist(val_loader, 'validation')
+        ut.separate_mnist(test_loader, 'test')
+elif arguments.dataset_name == 'omniglot':
+    Lclass = 50
+    datapath = 'omniglot_files/'
+    if not os.path.exists('omniglot_files'):
+        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+        ut.separate_omniglot(train_loader, 'train')
+        ut.separate_omniglot(val_loader, 'validation')
+        ut.separate_omniglot(test_loader, 'test')
+
+
+train_loader = ut.get_mnist_loaders(list(range(10)), 'train', arguments, path=datapath)
+val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
+test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
 
 arguments.dynamic_binarization = False
 
@@ -142,7 +161,22 @@ else:
     tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                       optimizer, dr, arguments.model_name) 
                       
-
 results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
 pickle.dump(results, open(results_path + results_name + '.pk', 'wb')) 
 
+### classifier
+classifier = cls(arguments, 100, 784, Lclass=Lclass)
+
+if arguments.cuda:
+    classifier = classifier.cuda()
+
+optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
+
+tr.train_classifier(arguments, train_loader, classifier=classifier, 
+                    prev_classifier=prev_classifier,
+                    prev_model=prev_model,
+                    optimizer_cls=optimizer_cls, dg=dg, perm=perm)
+
+acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+
+print('accuracy {}'.format(acc.item()))

@@ -223,11 +223,7 @@ results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
 
 # load the permutations
-<<<<<<< HEAD
 if arguments.dataset_name == 'dynamic_mnist':
-=======
-if 'mnist' in arguments.dataset_name:
->>>>>>> 435c0c7893f9fba64c1aa1549f814d7cb2d5ac28
     permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
