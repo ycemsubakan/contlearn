@@ -124,6 +124,10 @@ arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
+if arguments.cuda:
+    model = model.cuda()
+    if arguments.use_classifier:
+        classifier = classifier.cuda()
 if arguments.use_visdom:
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
@@ -223,18 +227,24 @@ results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
 
 # load the permutations
-if arguments.dataset_name == 'mnist':
+if 'mnist' in arguments.dataset_name:
     permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
 
 perm = permutations[arguments.permindex]
 
-model = VAE(arguments).cuda()
+model = VAE(arguments)
 if arguments.use_classifier:
-    classifier = cls(arguments, 100, 784, Lclass=Lclass).cuda()
+    classifier = cls(arguments, 100, 784, Lclass=Lclass)
 else: 
     classifier = None
+
+# cuda time
+if arguments.cuda:
+    model = model.cuda()
+    if arguments.use_classifier:
+        classifier = classifier.cuda()
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, Lclass):
@@ -271,31 +281,41 @@ for dg in range(0, Lclass):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
-        model = model.cuda()
+        if arguments.cuda:
+            model = model.cuda()
         EPconv = t1 = t2 = 0   
     else:
         print('training model... for digit {}'.format(dg))
         optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
-        model = model.cuda()
+        if arguments.cuda:
+            model = model.cuda()
         t1 = time.time()
         EPconv = tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                                    optimizer, dr, arguments.model_name, prev_model=prev_model, 
                                    dg=dg, perm=perm) 
         t2 = time.time()
 
-    if (arguments.use_classifier or arguments.semi_sup) and arguments.use_mixingw_correction and (arguments.prior != 'standard'):
-        if arguments.use_classifier:
-            yhat_means = model.balance_mixingw(classifier, dg=dg, perm=perm)
-        if arguments.semi_sup and dg>0:
-            yhat_means = model.balance_mixingw(dg=dg, perm=perm)
-        if arguments.use_visdom:
-            means = model.reconstruct_means()
-            opts = {}
-            opts['title'] = 'current means'
-            vis.images(means, win='means_cur', opts=opts)
-            vis.text(str(model.mixingw_c), win='mixingw')
-            vis.text(str(yhat_means), win='yhat_means')
-
+    if (arguments.use_classifier or arguments.semi_sup) and (arguments.prior != 'standard'):
+        if arguments.use_mixingw_correction:  
+            if arguments.use_classifier:
+                yhat_means, prior_class_ass, post_class_ass = model.balance_mixingw(classifier, dg=dg, perm=perm)
+            if arguments.semi_sup and dg>0:
+                yhat_means, prior_class_ass, post_class_ass = model.balance_mixingw(dg=dg, perm=perm)
+            if arguments.use_visdom:
+                means = model.reconstruct_means()
+                opts = {}
+                opts['title'] = 'current means'
+                vis.images(means, win='means_cur', opts=opts)
+                vis.text(str(model.mixingw_c), win='mixingw')
+                vis.text(str(yhat_means), win='yhat_means')
+        else:
+            if arguments.use_classifier: 
+                _, prior_class_ass = model.balance_mixingw(classifier, dg=dg, perm=perm, dont_balance=True)
+            if arguments.semi_sup: 
+                _, prior_class_ass = model.balance_mixingw(dg=dg, perm=perm, dont_balance=True)
+            post_class_ass = prior_class_ass
+    else:
+        prior_class_ass = post_class_ass = -1
                     
     if (dg > 0) and arguments.separate_means:
         model.merge_latent()
@@ -309,6 +329,8 @@ for dg in range(0, Lclass):
             results['class'] = acc.item()
         results['time'] = t2 - t1
         results['epochs'] = EPconv
+        results['prior_class_ass'] = prior_class_ass
+        results['post_class_ass'] = post_class_ass
         all_results.append(results)
         pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
     

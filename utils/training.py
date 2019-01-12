@@ -264,7 +264,9 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             yhat = classifier.forward(data)
             cent = nn.CrossEntropyLoss()
 
-            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg]).cuda()
+            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg])
+            if args.cuda:
+                targets = targets.cuda()
             loss_cls = cent(yhat, targets)
 
             if dg > 0: 
@@ -288,8 +290,6 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             optimizer_cls.step()
         
         print('EP {} batch {}, loss {}'.format(ep, batch_idx, loss_cls))
-
-
 
 
 def train_vae(epoch, args, train_loader, model, 
