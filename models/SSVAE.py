@@ -340,7 +340,7 @@ class SSVAE(Model):
         remainder = X_full.size(0) % MB
         if remainder == 1:
             X_full = X_full[:(X_full.size(0) - remainder)]
-            y_full = y_full[:(X_full.size(0) - remainder)]
+            y_full = y_full[:(y_full.size(0) - remainder)]
 
         I = int(math.ceil(X_full.size(0) / MB))
 
