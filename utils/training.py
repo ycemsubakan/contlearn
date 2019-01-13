@@ -14,7 +14,7 @@ import math
 import torch.nn as nn
 import copy
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
                     use_incoming_socket=False)
 #assert vis.check_connection()
 
@@ -413,9 +413,13 @@ def train_vae(epoch, args, train_loader, model,
             loss_p, _, _, _ = model.calculate_loss(model.prototypes, beta=beta, average=True)
             loss = loss + loss_p
 
-        if 0 and (dg > 0):
-            model.compute_class_entropy(classifier, dg, perm=perm)
-        
+        if args.use_entrmax and (dg > 0):
+            nent = model.compute_class_entropy(classifier, dg, perm=perm)
+            loss = loss + nent
+            if batch_idx % 300 == 0:
+                print('batch {}, loss {}, nent {}'.format(batch_idx, loss, nent))
+
+
         if batch_idx % 300 == 0:
             print('batch {}, loss {}'.format(batch_idx, loss))
 
@@ -450,7 +454,7 @@ def train_vae(epoch, args, train_loader, model,
         train_results['train_ce'] = train_ce
 
     if args.use_visdom:
-        vis.images(data.reshape(-1, args.input_size[0], args.input_size[1], args.input_size[2]))
+        vis.images(x.reshape(-1, args.input_size[0], args.input_size[1], args.input_size[2]), win='training_data')
          
     return model, train_results
 

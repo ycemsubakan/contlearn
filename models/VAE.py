@@ -167,9 +167,12 @@ class VAE(Model):
 
             else:
                 self.idle_input = torch.eye(self.args.number_components,
-                                            self.args.number_components).cuda()
+                                            self.args.number_components)
+                us_new = NonLinear(self.args.number_components, 300, bias=False, activation=nonlinearity)
+                if self.args.cuda:
+                    self.idle_input = self.idle_input.cuda()
+                    us_new = us_new.cuda()
 
-                us_new = NonLinear(self.args.number_components, 300, bias=False, activation=nonlinearity).cuda()
                 if not self.args.restart_means:
                     oldweights = self.means.linear.weight.data 
                     us_new.linear.weight.data[:, :number_components_prev] = oldweights 
@@ -260,17 +263,13 @@ class VAE(Model):
         yhat_means = F.softmax(classifier.forward(means), dim=1) 
 
         pis = self.mixingw(self.idle_input)
-
         ws = torch.matmul(yhat_means.t(), pis).squeeze()
-
         dist = ws[perm[:(dg+1)].long()]
 
-        pdb.set_trace()
         eps = 1e-30
         nent = (dist * torch.log(dist + eps)).sum()
 
-        return ent(ws[perm[:dg+1]])
-
+        return nent
 
 
 
