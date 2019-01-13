@@ -61,9 +61,12 @@ class SSVAE(Model):
         #    self.p_x_logvar = NonLinear(300, np.prod(self.args.input_size), activation=nn.Hardtanh(min_val=-4.5,max_val=0))
         self.mixingw_c = np.ones(self.args.number_components)
 
-        self.semi_supervisor = nn.Sequential(Linear(args.z1_size, args.num_classes), 
+        #self.semi_supervisor = nn.Sequential(Linear(args.z1_size, args.num_classes), 
+        #                                         nn.Softmax())
+        self.semi_supervisor = nn.Sequential(GatedDense(args.z1_size, args.z1_size),
+                                                 nn.Dropout(0.5),
+                                                 GatedDense(args.z1_size, args.num_classes),
                                                  nn.Softmax())
-        #self.criterion = nn.CrossEntropyLoss()
         
         # weights initialization
         for m in self.modules():
