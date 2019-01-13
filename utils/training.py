@@ -333,8 +333,6 @@ def train_vae(epoch, args, train_loader, model,
                 x_replay, y_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
             else:    
                 x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
-            if epoch % args.num_classes == 0:
-                print('replay size {}'.format(x_replay.size(0)))
             
             if args.replay_size == 'increase': 
                 data = torch.cat([data, x_replay.data], dim=0)
