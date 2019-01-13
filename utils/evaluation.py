@@ -224,21 +224,27 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         # grab the train data by iterating over the loader
         # there is no standardized tensor_dataset member across pytorch datasets
         full_data = []
+        full_y = []
         if not args.dataset_name == 'celeba':
-            for data, _ in train_loader:
+            for data, y in train_loader:
                 full_data.append(data)
+                full_y.append(y)
 
             full_data = torch.cat(full_data, 0)
+            full_y = torch.cat(full_y, 0)
         else:
-            for data, _ in it.islice(train_loader, 0, 100):
+            for data, y in it.islice(train_loader, 0, 100):
                 full_data.append(data)
+                full_y.append(y)
 
             full_data = torch.cat(full_data, 0)
+            full_y = torch.cat(full_y, 0)
 
         if args.cuda:
             test_data, test_target = test_data.cuda(), test_target.cuda()
             #if not args.dataset_name == 'celeba':
             full_data = full_data.cuda()
+            full_y = full_y.cuda()
 
         if args.dynamic_binarization:
             full_data = torch.bernoulli(full_data)
@@ -266,6 +272,11 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
             acc_test = model.calculate_accuracy(test_data, test_target, MB=args.MB)
             t_ll_e = time.time()
             print('Test accuracy value {:.2f} in time: {:.2f}s'.format(acc_test, t_ll_e - t_ll_s))
+        
+            t_ll_s = time.time()
+            acc_train = model.calculate_accuracy(full_data, full_y, MB=args.MB)
+            t_ll_e = time.time()
+            print('train accuracy value {:.2f} in time: {:.2f}s'.format(acc_train, t_ll_e - t_ll_s))
         
         # CALCULATE lower-bound
         t_ll_s = time.time()
@@ -318,6 +329,7 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         output['train_elbo'] = elbo_train
         if args.semi_sup:
             output['test_acc'] = acc_test
+            output['train_acc'] = acc_train
     
     return output
 

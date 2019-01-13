@@ -13,10 +13,6 @@ import itertools as it
 import pdb
 import visdom
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
-                    use_incoming_socket=False)
-assert vis.check_connection()
-
 
 def load_static_mnist(args, **kwargs):
     # set args

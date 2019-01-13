@@ -16,9 +16,6 @@ import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
-                    use_incoming_socket=False)
-
 parser = argparse.ArgumentParser(description='Multitask experiments')
 
 parser.add_argument('--use_visdom', type=int, default=0, 
@@ -126,6 +123,8 @@ arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 if arguments.use_visdom:
+    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+                    use_incoming_socket=False)
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
 
