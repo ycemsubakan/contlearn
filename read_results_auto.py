@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import os
 import copy
 
-path = 'results_massimo/'
+path = 'select_files_cem/'
+#path = 'results_massimo/'
 files = os.listdir(path)
 
 filesf = []

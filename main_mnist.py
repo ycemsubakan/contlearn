@@ -102,6 +102,7 @@ parser.add_argument('--restart_means', type=int, default=1, help='whether or not
 parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
+parser.add_argument('--use_entrmax', type=int, default=0, help='whether or not to use entropy maximization, {0, 1}')
 
 # semi supervise
 parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
@@ -198,25 +199,29 @@ else:
 cwd = os.getcwd() + '/'
 all_results = []
 
+# commented out some of the name because I saw a 'filename too long' error
 exp_details = 'permutation_' + str(arguments.permindex) + \
               'db_' + str(arguments.dynamic_binarization) + \
               arguments.model_name + \
               '_' + arguments.prior + \
               '_K' + str(arguments.number_components) + \
-              '_wu' + str(arguments.warmup) + \
-              '_z1_' + str(arguments.z1_size) + \
-              '_z2_' + str(arguments.z2_size) + \
               '_replay_size_'+ str(arguments.replay_size) + \
               arguments.replay_type + \
               '_add_cap_' + str(arguments.add_cap) + \
-              '_usevampmixingw_' +  str(arguments.use_vampmixingw) + \
-              '_separate_means_' + str(arguments.separate_means) + \
-              '_useclassifier_' + str(arguments.use_classifier) + \
+              '_usemixingw_' +  str(arguments.use_vampmixingw) + \
+              '_sep_means_' + str(arguments.separate_means) + \
+              '_useclass_' + str(arguments.use_classifier) + \
               '_semi_sup_' +str(arguments.semi_sup) + \
               '_Lambda_' + str(arguments.Lambda) + \
               '_use_mixingw_correction_' + str(arguments.use_mixingw_correction) + \
               '_use_replaycostcorrection_' + str(arguments.use_replaycostcorrection) + \
+              '_use_entrmax_' + str(arguments.use_entrmax) + \
               arguments.notes
+
+              #'_wu' + str(arguments.warmup) + \
+              #'_z1_' + str(arguments.z1_size) + \
+              #'_z2_' + str(arguments.z2_size) + \
+
 
 results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
