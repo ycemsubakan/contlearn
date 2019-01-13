@@ -102,10 +102,10 @@ parser.add_argument('--classifier_EP', type=int, default='75', help='number of i
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=1, help='whether or not to use a classifier to balance the classes, in {0, 1}')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
-parser.add_argument('--use_entrmax', type=int, default=0, help='whether or not to use entropy maximization, {0, 1}')
+parser.add_argument('--use_entrmax', type=int, default=1, help='whether or not to use entropy maximization, {0, 1}')
 
 # semi supervise
 parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')

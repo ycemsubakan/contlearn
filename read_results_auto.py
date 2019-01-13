@@ -15,6 +15,7 @@ priors = ['vampprior_short', 'standard']
 replays = ['replay_size_increase', 'replay_size_constant']
 mixingw_cor = ['use_mixingw_correction_0', 'use_mixingw_correction_1']
 cost_cor = ['costcorrection_0', 'costcorrection_1']
+maxent = ['use_entrmax_1', 'llcor']
 
 models = [] 
 
@@ -23,17 +24,20 @@ for pr in priors:
     for rp in replays:
         for mc in mixingw_cor:
             for cc in cost_cor:
-                models.append([])
-                for fl in files:
-                    if (pr in fl) and (rp in fl) and (mc in fl) and (cc in fl):
-                        models[i].append(fl)    
-                
-                # deal with non-existing combinations
-                if len(models[i]) == 0:
-                    models.pop()    
-                else: 
-                    i = i +  1
-                    print(len(models[-1]))
+                for me in maxent:
+                    models.append([])
+                    for fl in files:
+                        if (pr in fl) and (rp in fl) and (mc in fl) and (cc in fl) and (me in fl):
+                            models[i].append(fl)    
+                    
+                    # deal with non-existing combinations
+                    if len(models[i]) == 0:
+                        models.pop()    
+                    else: 
+                        i = i +  1
+                        print(len(models[-1]))
+
+pdb.set_trace()
 
 
 #for i, fl in enumerate(files):
