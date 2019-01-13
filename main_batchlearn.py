@@ -7,7 +7,7 @@ import argparse
 import models 
 import copy
 import os
-import utilities as ut
+#import utilities as ut
 import pickle
 
 from utils.optimizer import AdamNormGrad
@@ -15,7 +15,7 @@ import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
                             use_incoming_socket=False)
 assert vis.check_connection()
 
@@ -85,7 +85,7 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
-                            help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+                            help='name of the dataset: static_mnist, dynamic_mnist, omniglot, fashion_mnist ,caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
 parser.add_argument('--dynamic_binarization', action='store_true', default=False,
                             help='allow dynamic binarization')
 
@@ -118,24 +118,26 @@ print('load data')
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
-    if not os.path.exists('mnist_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_mnist(train_loader, 'train')
-        ut.separate_mnist(val_loader, 'validation')
-        ut.separate_mnist(test_loader, 'test')
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
-    if not os.path.exists('omniglot_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_omniglot(train_loader, 'train')
-        ut.separate_omniglot(val_loader, 'validation')
-        ut.separate_omniglot(test_loader, 'test')
+elif arguments.dataset_name == 'fashion_mnist': 
+    Lclass = 10
+    datapath = 'fashion_mnist_files'
+elif arguments.dataset_name == 'mnist_plus_fmnist': 
+    Lclass = 20
+    datapath = 'fashion_mnist_files'
 
-
-train_loader = ut.get_mnist_loaders(list(range(10)), 'train', arguments, path=datapath)
-val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
-test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
+train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+    
+#train_loader = ut.get_mnist_loaders([9], 'train', arguments, path=datapath)
+#val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
+#test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
+#
+#
+dt = next(iter(val_loader))
+vis.images(dt[0].reshape(-1, 1, 28, 28))
+##
 
 arguments.dynamic_binarization = False
 

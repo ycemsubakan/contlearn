@@ -148,22 +148,27 @@ if not os.path.exists(results_path):
 print('load data')
 
 # Dataset preparation
+
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
-    if not os.path.exists('mnist_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_mnist(train_loader, 'train')
-        ut.separate_mnist(val_loader, 'validation')
-        ut.separate_mnist(test_loader, 'test')
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
-    if not os.path.exists('omniglot_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_omniglot(train_loader, 'train')
-        ut.separate_omniglot(val_loader, 'validation')
-        ut.separate_omniglot(test_loader, 'test')
+elif arguments.dataset_name == 'fashion_mnist': 
+    Lclass = 10
+    datapath = 'fashion_mnist_files'
+elif arguments.dataset_name == 'mnist_plus_fmnist': 
+    Lclass = 20
+    datapath = 'mnist_plus_fmnist_files'
+
+
+if not os.path.exists(datapath):
+    train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+    ut.separate_datasets(train_loader, 'train', Lclass, datapath)
+    ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
+    ut.separate_datasets(val_loader, 'test', Lclass, datapath)
+
 
 
 #C = 29 

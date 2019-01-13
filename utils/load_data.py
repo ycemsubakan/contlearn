@@ -122,6 +122,76 @@ def load_patch_celeba(args, **kwargs):
     test_loader = create_patches(args, test_loader) 
     return train_loader, val_loader, test_loader, args
 
+def load_fashion_mnist(args, label_offset=0, **kwargs):
+    args.input_size = [1, 28, 28]
+    args.input_type = 'gray'
+    args.dynamic_binarization = False
+    n_validation = 10000
+
+    from torchvision import datasets, transforms
+    train_loader = torch.utils.data.DataLoader(datasets.FashionMNIST('../fmnist_data', train=True, download=True,
+                                                               transform=transforms.Compose([
+                                                                   transforms.ToTensor()
+                                                               ])),
+                                               batch_size=args.batch_size, shuffle=True)
+
+    test_loader = torch.utils.data.DataLoader(datasets.FashionMNIST('../fmnist_data', train=False, download=True,
+                                                              transform=transforms.Compose([transforms.ToTensor()
+                                                                        ])),
+                                              batch_size=args.batch_size, shuffle=True)
+
+    train_ft = train_loader.dataset.train_data.float().reshape(-1, 784) / 255
+    train_tar = train_loader.dataset.train_labels + label_offset
+
+    x_train = train_ft[:-n_validation] 
+    x_val = train_ft[-n_validation:] 
+
+    y_train = train_tar[:-n_validation] 
+    y_val = train_tar[-n_validation:] 
+
+    x_test = test_loader.dataset.test_data.float().reshape(-1, 784) / 255
+    y_test = test_loader.dataset.test_labels + label_offset
+
+    train = data_utils.TensorDataset(x_train, y_train)
+    train_loader = data_utils.DataLoader(train, batch_size=args.batch_size, shuffle=True, **kwargs)
+
+    validation = data_utils.TensorDataset(x_val, y_val)
+    val_loader = data_utils.DataLoader(validation, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+
+    test = data_utils.TensorDataset(x_test, y_test)
+    test_loader = data_utils.DataLoader(test, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+
+    args.pseudoinputs_mean = 0.05
+    args.pseudoinputs_std = 0.01
+
+    return train_loader, val_loader, test_loader, args
+
+def load_mnist_plus_fmnist(args, **kwargs):
+    args.input_size = [1, 28, 28]
+    args.input_type = 'gray'
+    args.dynamic_binarization = False
+
+    import torch.utils.data as data_utils
+    
+    train_loader, val_loader, test_loader, _ = load_dynamic_mnist(args)
+    train_loader2, val_loader2, test_loader2, _ = load_fashion_mnist(args, label_offset=10)
+
+    train_dataset = data_utils.ConcatDataset([train_loader.dataset, train_loader2.dataset]) 
+    val_dataset = data_utils.ConcatDataset([val_loader.dataset, val_loader2.dataset]) 
+    test_dataset = data_utils.ConcatDataset([test_loader.dataset, test_loader2.dataset]) 
+
+    shuffle = True
+    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+    
+    train_loader = data_utils.DataLoader(train_dataset, batch_size=args.batch_size,
+                                         shuffle=shuffle, **kwargs)
+    val_loader = data_utils.DataLoader(val_dataset, batch_size=args.batch_size,
+                                         shuffle=shuffle, **kwargs)
+    test_loader = data_utils.DataLoader(test_dataset, batch_size=args.batch_size,
+                                         shuffle=shuffle, **kwargs)
+
+    return train_loader, val_loader, test_loader, args
+
  
 def load_svhn(args, **kwargs):
 
@@ -219,7 +289,7 @@ def load_dynamic_mnist(args, **kwargs):
     # set args
     args.input_size = [1, 28, 28]
     args.input_type = 'binary'
-    args.dynamic_binarization = True
+    #args.dynamic_binarization = True
 
     # start processing
     from torchvision import datasets, transforms
@@ -553,6 +623,7 @@ def load_dataset(args, **kwargs):
     if args.dataset_name == 'static_mnist':
         train_loader, val_loader, test_loader, args = load_static_mnist(args, **kwargs)
     elif args.dataset_name == 'dynamic_mnist':
+        args.dynamic_binarization = True
         train_loader, val_loader, test_loader, args = load_dynamic_mnist(args, **kwargs)
     elif args.dataset_name == 'sequential_mnist':
         train_loader, val_loader, test_loader, args = load_sequential_mnist(args, **kwargs)
@@ -572,6 +643,10 @@ def load_dataset(args, **kwargs):
         train_loader, val_loader, test_loader, args = load_patch_celeba(args, **kwargs)
     elif args.dataset_name == 'svhn':
         train_loader, val_loader, test_loader, args = load_svhn(args, **kwargs)
+    elif args.dataset_name == 'fashion_mnist':
+        train_loader, val_loader, test_loader, args = load_fashion_mnist(args, **kwargs)
+    elif args.dataset_name == 'mnist_plus_fmnist':
+        train_loader, val_loader, test_loader, args = load_mnist_plus_fmnist(args, **kwargs)
     else:
         raise Exception('There is no support for such dataset name')
 

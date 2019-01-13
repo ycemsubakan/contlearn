@@ -397,7 +397,8 @@ def mag2spec_and_audio(xhat, MSphase, arguments):
 
     return all_audio, mags
 
-def separate_mnist(loader, dataset_type):
+
+def separate_datasets(loader, dataset_type, Klabels, folder):
     fts = []
     labels = []
     for i, (ft, tar) in enumerate(loader):   
@@ -408,7 +409,7 @@ def separate_mnist(loader, dataset_type):
     all_labels = torch.cat(labels, dim=0)
 
     datasets = [] 
-    for lb in range(10):
+    for lb in range(Klabels):
         mask = torch.eq(all_labels, lb)
         inds = torch.nonzero(mask).squeeze()
         dt = torch.index_select(all_fts, dim=0, index=inds)
@@ -416,31 +417,6 @@ def separate_mnist(loader, dataset_type):
 
         datasets.append(data_utils.TensorDataset(dt, lbls))
 
-    folder = 'mnist_files/'
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    torch.save(datasets, folder + dataset_type + '.t' ) 
-
-def separate_omniglot(loader, dataset_type):
-    fts = []
-    labels = []
-    for i, (ft, tar) in enumerate(loader):   
-        fts.append(ft)
-        labels.append(tar)
-    
-    all_fts = torch.cat(fts, dim=0)
-    all_labels = torch.cat(labels, dim=0)
-
-    datasets = [] 
-    for lb in range(55):
-        mask = torch.eq(all_labels, lb)
-        inds = torch.nonzero(mask).squeeze()
-        dt = torch.index_select(all_fts, dim=0, index=inds)
-        lbls = torch.index_select(all_labels, dim=0, index=inds)
-
-        datasets.append(data_utils.TensorDataset(dt, lbls))
-
-    folder = 'omniglot_files/'
     if not os.path.exists(folder):
         os.mkdir(folder)
     torch.save(datasets, folder + dataset_type + '.t' ) 
