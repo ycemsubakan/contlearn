@@ -12,6 +12,8 @@ import time
 import os
 import pdb
 import itertools as it
+import torch.nn.functional as F
+import pickle
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 # ======================================================================================================================
@@ -168,7 +170,8 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
-                 prev_model=None, use_mixw_cor=False, dg=0):
+                 prev_model=None, use_mixw_cor=False, classifier=None, perm=None, 
+                 results_name=None, dg=0):
     
     # set loss to 0
     evaluate_loss = 0
@@ -254,9 +257,26 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
         #plot_images(args, samples.data.cpu().numpy(), dir, 'reconstructions', size_x=5, size_y=5)
 
-        # VISUALIZATION: plot generations
-        if args.model_name != 'vrae':
-            samples_rand = model.generate_x(25)
+        # VISUALIZATION: plot generations and save them
+        samples_rand = model.generate_x(1000)
+        if classifier != None:
+            yhat = F.softmax(classifier.forward(samples_rand), dim=1)
+            ws_emp = yhat.mean(0)[perm[:(dg+1)].long()]
+            eps = 1e-30
+            ent_emp = (ws_emp * torch.log(ws_emp + eps)).sum().item()
+            ws_emp = ws_emp.data.cpu().numpy()
+            ws_emp_full = yhat.mean(0).data.cpu().numpy()
+
+        if model.args.prior == 'vampprior_short':
+            ent_model, ws_model = model.compute_class_entropy(classifier, dg, perm)   
+            ws_model = ws_model.data.cpu().numpy()
+            ent_model = ent_model.item() 
+
+        samples_path = 'gensamples_files/'
+        if not os.path.exists(samples_path):
+            os.mkdir(samples_path)
+        tosave = samples_rand.data.cpu().numpy()[:64]
+        pickle.dump(tosave, open(samples_path + 'task' + str(dg) + results_name + '.pk', 'wb'))
 
             #plot_images(args, samples_rand.data.cpu().numpy(), dir, 'generations', size_x=5, size_y=5)
 
@@ -330,6 +350,13 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         if args.semi_sup:
             output['test_acc'] = acc_test
             output['train_acc'] = acc_train
+        
+        if args.prior == 'vampprior_short':
+            output['ws_model'] = ws_model
+            output['ent_model'] = ent_model
+        output['ws_emp'] = ws_emp
+        output['ws_emp_full'] = ws_emp_full
+        output['ent_emp'] = ent_emp
     
     return output
 

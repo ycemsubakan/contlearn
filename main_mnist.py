@@ -82,7 +82,7 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
-                    help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+                    help='name of the dataset: dynamic_mnist, omniglot, fashion_mnist, mnist_plus_fmnist')
 parser.add_argument('--permindex', type=int, default=1, 
                     help='permutation index, integer in [0, 1000)' )
 parser.add_argument('--dynamic_binarization', type=int, default=1,
@@ -123,7 +123,7 @@ arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 if arguments.use_visdom:
-    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
                     use_incoming_socket=False)
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
@@ -161,7 +161,7 @@ elif arguments.dataset_name == 'fashion_mnist':
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
     datapath = 'mnist_plus_fmnist_files'
-
+    arguments.dynamic_binarization = 0
 
 if not os.path.exists(datapath):
     train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
@@ -236,6 +236,8 @@ if arguments.dataset_name == 'dynamic_mnist':
     permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
+elif arguments.dataset_name == 'mnist_plus_fmnist':
+    permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_mila-CE0D_2019-01-1414:53:53.285461.t')
 
 perm = permutations[arguments.permindex]
 
@@ -321,7 +323,7 @@ for dg in range(0, Lclass):
                 _, prior_class_ass = model.balance_mixingw(classifier, dg=dg, perm=perm, dont_balance=True)
             if arguments.semi_sup: 
                 _, prior_class_ass = model.balance_mixingw(dg=dg, perm=perm, dont_balance=True)
-            post_class_ass = prior_class_ass
+            post_class_ass = copy.deepcopy(prior_class_ass)
                     
     if (dg > 0) and arguments.separate_means:
         model.merge_latent()
@@ -329,7 +331,7 @@ for dg in range(0, Lclass):
 
     # when doing the hyperparameter search, pay attention to what results you are saving
     if 1: 
-        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction)
+        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
         results['digit'] = dg
         if arguments.use_classifier: 
             results['class'] = acc.item()

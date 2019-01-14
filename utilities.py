@@ -49,8 +49,8 @@ def get_mnist_loaders(digits, dataset_type, arguments, path = 'mnist_files/',
     
     if model != None:
         N = len(dataset)
-        x_replay = torch.TensorDataset(model.generate_x(dg*N, replay=True).data,
-                                       torch.zeros(dg*N))
+        x_replay = data_utils.TensorDataset(model.generate_x(dg*N, replay=True).data.cpu(),
+                                            torch.zeros(dg*N).long())
         dataset = data_utils.ConcatDataset([dataset, x_replay])
 
 

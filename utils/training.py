@@ -263,6 +263,7 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             # to avoid the singleton case
             if data.size(0) == 1:
                 data = torch.cat([data, data], dim=0)
+                target = torch.cat([target, target], dim=0)
 
             optimizer_cls.zero_grad()
             yhat = classifier.forward(data)
@@ -417,7 +418,7 @@ def train_vae(epoch, args, train_loader, model,
             loss = loss + loss_p
 
         if args.use_entrmax and (dg > 0):
-            nent = model.compute_class_entropy(classifier, dg, perm=perm)
+            nent, _ = model.compute_class_entropy(classifier, dg, perm=perm)
             loss = loss + nent
             if batch_idx % 300 == 0:
                 print('batch {}, loss {}, nent {}'.format(batch_idx, loss, nent))

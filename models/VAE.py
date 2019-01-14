@@ -269,7 +269,7 @@ class VAE(Model):
         eps = 1e-30
         nent = (dist * torch.log(dist + eps)).sum()
 
-        return nent
+        return nent, ws
 
 
 
@@ -665,7 +665,7 @@ class VAE(Model):
         self.args.prior = 'GMM'
 
 class classifier(nn.Module):
-    def __init__(self, args, K, L, Lclass=10, architecture='ff'):
+    def __init__(self, args, K, L, Lclass=10, architecture='conv'):
         super(classifier, self).__init__()
         
         self.K = K

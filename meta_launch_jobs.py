@@ -10,7 +10,7 @@ except:
     host = 'cedar'
 print(host)
 
-PRIORS = ['vampprior_short'] #, 'standard']
+PRIORS = ['vampprior_short', 'standard']
 REPLAYS = ['increase', 'constant']
 ADD_CAP = [1]
 #CLASSIFIER = [1]
@@ -20,7 +20,7 @@ DYNAMIC_BINARIZATION = [1]
 ENTR_MAX = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(0, 10)
+    PERM_RANGE = range(0, 1)
 else: 
     PERM_RANGE = range(5, 10)
 
@@ -30,7 +30,7 @@ vamp_mix = VAMP_MIX[0]
 
 for prior in PRIORS:
     if prior == 'vampprior_short':
-        REBALANCES = [1] #[0, 1]
+        REBALANCES = [0, 1]
     elif prior == 'standard':
         REBALANCES = [0]
 
@@ -56,7 +56,8 @@ for prior in PRIORS:
                         --dynamic_binarization %(db)s \
                         --permindex %(permid)s \
                         --use_replaycostcorrection %(costc)s \
-                        --notes maxentb1" % locals()
+                        --dataset_name mnist_plus_fmnist \
+                        --notes mpfmnistb1" % locals()
                 
                         print(command)
                 
