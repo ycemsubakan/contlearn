@@ -168,7 +168,7 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
-                 prev_model=None, use_mixw_cor=False):
+                 prev_model=None, use_mixw_cor=False, dg=0):
     
     # set loss to 0
     evaluate_loss = 0
@@ -189,10 +189,10 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
             target = torch.cat([target, target], dim=0)
-        
-        if args.dataset_name == 'patch_celeba':
-            data = data.reshape(-1, int(np.prod(args.input_size)))
 
+        #if mode == 'validation':
+        #    x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+        
         # to avoid the singleton case (otherwise it breaks the code)
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
@@ -335,6 +335,7 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
 def evaluate_classifier(args, classifier, data_loader):
 
+    classifier.eval()
     all_lbls = []
     all_preds = []
 

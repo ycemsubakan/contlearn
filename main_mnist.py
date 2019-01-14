@@ -253,6 +253,10 @@ if arguments.cuda:
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, Lclass):
+    
+    if dg == 0:
+        prev_model = None
+        prev_classifier = None
 
     print('\n________________________')
     print('starting task {}'.format(dg))
@@ -260,17 +264,14 @@ for dg in range(0, Lclass):
 
     train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments, 
                                         path=datapath)
-    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments, path=datapath)
+    val_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'validation', arguments, path=datapath, model=prev_model, dg=dg)
     test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments, path=datapath)
     
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
 
     model_path = cwd + files_path + model_name + '.model'
-    if dg == 0:
-        prev_model = None
-        prev_classifier = None
-
+    
     if arguments.use_classifier:
         optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
 

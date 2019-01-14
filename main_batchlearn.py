@@ -88,6 +88,12 @@ parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar
                             help='name of the dataset: static_mnist, dynamic_mnist, omniglot, fashion_mnist ,caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
 parser.add_argument('--dynamic_binarization', action='store_true', default=False,
                             help='allow dynamic binarization')
+parser.add_argument('--use_entrmax', type=int, default=0, help='whether or not to use entropy maximization, {0, 1}')
+# semi supervise
+parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
+parser.add_argument('--Lambda', type=float, default=1, help='weight of the classification loss')
+parser.add_argument('--debug', action='store_true', 
+                    help='debugging mode skips stuff')
 
 # notes
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
@@ -148,8 +154,29 @@ model_name = results_name = arguments.dataset_name + '_' + exp_details
 dr = files_path + model_name
 model_path = dr + '.model'
 
-model = VAE(arguments).cuda()
 
+### classifier
+arguments.classifier_EP = 100
+classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='conv')
+
+if arguments.cuda:
+    classifier = classifier.cuda()
+
+optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
+
+tr.train_classifier(arguments, train_loader, classifier=classifier, 
+                    optimizer_cls=optimizer_cls)
+
+acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+
+print('accuracy {}'.format(acc.item()))
+pdb.set_trace()
+
+
+### generator
+model = VAE(arguments)
+if arguments.cuda:
+    model = model.cuda()
 
 if 0 & os.path.exists(model_path):
     print('loading model...')
@@ -159,26 +186,10 @@ if 0 & os.path.exists(model_path):
 else:
     print('training model...')
     optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
-    model = model.cuda()
     tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                       optimizer, dr, arguments.model_name) 
                       
 results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
 pickle.dump(results, open(results_path + results_name + '.pk', 'wb')) 
 
-### classifier
-classifier = cls(arguments, 100, 784, Lclass=Lclass)
 
-if arguments.cuda:
-    classifier = classifier.cuda()
-
-optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
-
-tr.train_classifier(arguments, train_loader, classifier=classifier, 
-                    prev_classifier=prev_classifier,
-                    prev_model=prev_model,
-                    optimizer_cls=optimizer_cls, dg=dg, perm=perm)
-
-acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
-
-print('accuracy {}'.format(acc.item()))

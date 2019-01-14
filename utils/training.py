@@ -248,6 +248,10 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
                      classifier=None, prev_classifier=None, prev_model=None, 
                      optimizer_cls=None, dg=0):
 
+    classifier.train()
+    if prev_classifier != None:
+        prev_classifier.eval()
+
     # start training
     EP = args.classifier_EP
     for ep in range(EP):
@@ -264,10 +268,10 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             yhat = classifier.forward(data)
             cent = nn.CrossEntropyLoss()
 
-            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg])
-            if args.cuda:
-                targets = targets.cuda()
-            loss_cls = cent(yhat, targets)
+            #targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg])
+            #if args.cuda:
+            #    targets = targets.cuda()
+            loss_cls = cent(yhat, target)
 
             if dg > 0: 
                 if args.replay_size == 'increase':
