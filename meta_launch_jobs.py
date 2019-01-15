@@ -10,7 +10,7 @@ except:
     host = 'cedar'
 print(host)
 
-PRIORS = ['vampprior_short', 'standard']
+PRIORS = ['vampprior_short'] #, 'standard']
 REPLAYS = ['increase', 'constant']
 ADD_CAP = [1]
 #CLASSIFIER = [1]
@@ -57,6 +57,7 @@ for prior in PRIORS:
                         --permindex %(permid)s \
                         --use_replaycostcorrection %(costc)s \
                         --dataset_name mnist_plus_fmnist \
+                        --load_models \
                         --notes mpfmnistb1" % locals()
                 
                         print(command)

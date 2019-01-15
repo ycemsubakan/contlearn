@@ -156,13 +156,13 @@ model_path = dr + '.model'
 
 
 ### classifier
-arguments.classifier_EP = 100
-classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='conv')
+arguments.classifier_EP = 50
+classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
 
 if arguments.cuda:
     classifier = classifier.cuda()
 
-optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
+optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
 
 tr.train_classifier(arguments, train_loader, classifier=classifier, 
                     optimizer_cls=optimizer_cls)

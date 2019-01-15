@@ -379,9 +379,9 @@ class VAE(Model):
 
             loss, RE, KL, _ = self.calculate_loss(x,average=True, use_mixw_cor=use_mixw_cor)
 
-            RE_all += RE.cpu().data[0]
-            KL_all += KL.cpu().data[0]
-            lower_bound += loss.cpu().data[0]
+            RE_all += RE.cpu().item()
+            KL_all += KL.cpu().item()
+            lower_bound += loss.cpu().item()
 
         lower_bound /= I
 
@@ -665,7 +665,7 @@ class VAE(Model):
         self.args.prior = 'GMM'
 
 class classifier(nn.Module):
-    def __init__(self, args, K, L, Lclass=10, architecture='conv'):
+    def __init__(self, args, K, L, Lclass=10, architecture='ff'):
         super(classifier, self).__init__()
         
         self.K = K
@@ -677,6 +677,7 @@ class classifier(nn.Module):
             activation = nn.ReLU()
             self.layer = nn.Sequential(
                 GatedDense(L, K, activation=activation),
+                nn.Dropout(p=0.2),
                 GatedDense(K, Lclass, activation=None)
             )
         elif architecture == 'conv':
@@ -686,7 +687,7 @@ class classifier(nn.Module):
             self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
             self.maxpool2 = nn.MaxPool2d(kernel_size=2)
             self.conv2_drop = nn.Dropout2d()
-            self.dropout = nn.Dropout(p=0.5)
+            self.dropout = nn.Dropout(p=0.1)
 
             self.BN = nn.BatchNorm1d(320)
             self.fc1 = nn.Linear(320, 50)

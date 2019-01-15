@@ -297,6 +297,8 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
         print('EP {} batch {}, loss {}'.format(ep, batch_idx, loss_cls))
 
 
+
+
 def train_vae(epoch, args, train_loader, model, 
               optimizer, classifier=None, prev_classifier=None, prev_model=None, 
               optimizer_cls=None, perm=torch.arange(10), dg=0):

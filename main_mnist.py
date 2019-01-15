@@ -22,6 +22,9 @@ parser.add_argument('--use_visdom', type=int, default=0,
                     help='use/not use visdom, {0, 1}')
 parser.add_argument('--debug', action='store_true', 
                     help='debugging mode skips stuff')
+parser.add_argument('--load_models', action='store_true', 
+                    help='load already trained models and obtained results (checkpointing)')
+
 parser.add_argument('--batch_size', type=int, default=100, metavar='BStrain',
                     help='input batch size for training (default: 100)')
 parser.add_argument('--test_batch_size', type=int, default=100, metavar='BStest',
@@ -117,6 +120,7 @@ parser.add_argument('--notes', type=str, default='', help='comments on the exper
 # continually training without replay
 
 # for mnist, need to repeat the experiments with bernoulli cost  
+tstart = time.time()
 
 arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
@@ -158,6 +162,7 @@ elif arguments.dataset_name == 'omniglot':
 elif arguments.dataset_name == 'fashion_mnist': 
     Lclass = 10
     datapath = 'fashion_mnist_files'
+    arguments.dynamic_binarization = 0
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
     datapath = 'mnist_plus_fmnist_files'
@@ -168,7 +173,6 @@ if not os.path.exists(datapath):
     ut.separate_datasets(train_loader, 'train', Lclass, datapath)
     ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
     ut.separate_datasets(val_loader, 'test', Lclass, datapath)
-
 
 
 #C = 29 
@@ -238,6 +242,8 @@ elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
 elif arguments.dataset_name == 'mnist_plus_fmnist':
     permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_mila-CE0D_2019-01-1414:53:53.285461.t')
+elif arguments.dataset_name == 'fashion_mnist':
+    permutations = torch.load('fashion_mnistpermutations_seed2_mila-CE0D_2019-01-1517:29:07.967413.t')
 
 perm = permutations[arguments.permindex]
 
@@ -275,7 +281,7 @@ for dg in range(0, Lclass):
     model_path = cwd + files_path + model_name + '.model'
     
     if arguments.use_classifier:
-        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
+        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
 
         tr.train_classifier(arguments, train_loader, classifier=classifier, 
                             prev_classifier=prev_classifier,
@@ -285,7 +291,7 @@ for dg in range(0, Lclass):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if arguments.debug and os.path.exists(model_path):
+    if (arguments.debug or arguments.load_models) and os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
@@ -331,16 +337,35 @@ for dg in range(0, Lclass):
 
     # when doing the hyperparameter search, pay attention to what results you are saving
     if 1: 
-        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
-        results['digit'] = dg
-        if arguments.use_classifier: 
-            results['class'] = acc.item()
-        results['time'] = t2 - t1
-        results['epochs'] = EPconv
-        results['prior_class_ass'] = prior_class_ass
-        results['post_class_ass'] = post_class_ass
-        all_results.append(results)
-        pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        if arguments.load_models: 
+            try:
+                print('trying to open results for task {}'.format(dg))
+                temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
+                all_results.append(temp[dg])
+            except:
+                print('failed to open results for task {}, now getting evaluations'.format(dg))
+                results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
+                results['digit'] = dg
+                if arguments.use_classifier: 
+                    results['class'] = acc.item()
+                results['time'] = t2 - t1
+                results['epochs'] = EPconv
+                results['prior_class_ass'] = prior_class_ass
+                results['post_class_ass'] = post_class_ass
+                all_results.append(results)
+                pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        else:
+            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
+            results['digit'] = dg
+            if arguments.use_classifier: 
+                results['class'] = acc.item()
+            results['time'] = t2 - t1
+            results['epochs'] = EPconv
+            results['prior_class_ass'] = prior_class_ass
+            results['post_class_ass'] = post_class_ass
+            all_results.append(results)
+            pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+
     
     if arguments.replay_type == 'replay': 
         prev_model = copy.deepcopy(model)
@@ -362,3 +387,5 @@ for dg in range(0, Lclass):
     else:
         model.restart_latent_space()
 
+    tend = time.time()
+    print('elapsed time: {}, task {}'.format(tend-tstart, dg))

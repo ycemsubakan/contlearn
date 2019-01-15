@@ -300,13 +300,13 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         
         # CALCULATE lower-bound
         t_ll_s = time.time()
-        elbo_test = model.calculate_lower_bound(test_data, MB=args.MB).item()
+        elbo_test = model.calculate_lower_bound(test_data, MB=args.MB)
         t_ll_e = time.time()
         print('Test lower-bound value {:.2f} in time: {:.2f}s'.format(elbo_test, t_ll_e - t_ll_s))
 
         # CALCULATE lower-bound
         t_ll_s = time.time()
-        if not args.debug: elbo_train = model.calculate_lower_bound(full_data, MB=args.MB).item()
+        if not args.debug: elbo_train = model.calculate_lower_bound(full_data, MB=args.MB)
         else: elbo_train = -1
         t_ll_e = time.time()
         print('Train lower-bound value {} in time: {:.2f}s'.format(elbo_train, t_ll_e - t_ll_s))
