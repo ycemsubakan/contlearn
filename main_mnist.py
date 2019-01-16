@@ -167,12 +167,12 @@ elif arguments.dataset_name == 'omniglot':
     datapath = 'omniglot_files/'
 elif arguments.dataset_name == 'fashion_mnist': 
     Lclass = 10
-    datapath = 'fashion_mnist_files'
+    datapath = 'fashion_mnist_files/'
     arguments.dynamic_binarization = 0
     arguments.input_type = 'gray'
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
-    datapath = 'mnist_plus_fmnist_files'
+    datapath = 'mnist_plus_fmnist_files/'
     arguments.dynamic_binarization = 0
     arguments.input_type = 'binary'
 

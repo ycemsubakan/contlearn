@@ -17,12 +17,19 @@ files = os.listdir(path)
 
 filesf = []
 
+for fl in files:
+    if 'fmnistb2' in fl:
+        filesf.append(fl)
+files = copy.deepcopy(filesf)
+
+pdb.set_trace()
+
 PRIORS = ['vampprior_short', 'standard']
 REPLAYS = ['increase', 'constant']
 add_cap = 1
 vamp_mix = 1
-DYNAMIC_BINARIZATION = [1]
-PERM_RANGE = range(10, 15)
+DYNAMIC_BINARIZATION = [0]
+PERM_RANGE = range(2, 5)
 
 all_combs = 0 
 found_files = []
@@ -48,7 +55,7 @@ for prior in PRIORS:
                         all_combs = all_combs + 1
                         found = 0 
                         for fl in files: 
-                            if (prior in fl) and (('replay_size_' + replay) in fl) and (('mixingw_correction_' + str(rebalance) ) in fl) \
+                            if (prior in fl) and (('replay_size_' + replay) in fl) and (('entrmax_' + str(rebalance) ) in fl) \
                                     and (('permutation_' + str(permid))  in fl) and (('replaycostcorrection_' + str(costc) in fl)):
                                     
                                     found_files.append(fl)                          
@@ -77,8 +84,8 @@ for prior in PRIORS:
                             else:
                                 command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
 
-                            os.system(command)
-                            time.sleep(2)
+                            #os.system(command)
+                            #time.sleep(2)
 
 #print(found_files[:4])
 print('found files {}'.format(len(found_files)))
