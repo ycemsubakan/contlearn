@@ -20,7 +20,7 @@ DYNAMIC_BINARIZATION = [0]
 ENTR_MAX = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(0, 2)
+    PERM_RANGE = range(2, 5)
 else: 
     PERM_RANGE = range(5, 10)
 
@@ -58,7 +58,7 @@ for prior in PRIORS:
                         --use_replaycostcorrection %(costc)s \
                         --classifier_lr 0.0005 \
                         --dataset_name fashion_mnist \
-                        --notes fmnistb1" % locals()
+                        --notes fmnistb2" % locals()
                         # --load_models \
                 
                         print(command)

@@ -66,7 +66,7 @@ for i, mdl in enumerate(models):
         except:
             temp2 = [res['test_acc'] for res in results]
 
-        if (len(temp1) == T): #and ('permutation_1' in fl): #and ('permutation_4' not in fl) and ('permutation_0' not in fl):
+        if (len(temp1) == T): #and ('permutation_4' not in fl) and ('permutation_0' not in fl):
             test_lls.append(temp1)
             test_cls.append(temp2)
             NC = NC + 1
@@ -80,7 +80,7 @@ for i, mdl in enumerate(models):
     lbl = lbl.replace('_wu100_z1_40_z2_40', ' ').replace('replay_size', ' ').replace('add_cap_0_usevampmixingw_1_separate_means_0_useclassifier_1', ' ').replace('dynamic_mnist_permutation', ' ')
     #plt.subplot(121)
     if test_lls.shape[0] > 0:
-        plt.plot(np.arange(test_lls.shape[1]), test_lls.mean(0), '-' + colors[i] + markers[i], label=lbl + 'NC' + str(NC))
+        plt.plot(np.arange(test_cls.shape[1]), test_cls.mean(0), '-' + colors[i] + markers[i], label=lbl + 'NC' + str(NC))
         #parts = plt.violinplot(positions=np.arange(T) + (0.1*i) , dataset=test_lls, widths=0.1)
 
     #for pc in parts['bodies']:

@@ -261,11 +261,16 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         samples_rand = model.generate_x(1000)
         
         yhat = F.softmax(expert_classifier.forward(samples_rand), dim=1)
+        
         ws_emp = yhat.mean(0)[perm[:(dg+1)].long()]
         eps = 1e-30
         ent_emp = (ws_emp * torch.log(ws_emp + eps)).sum().item()
         ws_emp = ws_emp.data.cpu().numpy()
-        ws_emp_full = yhat.mean(0).data.cpu().numpy()
+
+        ws_emp_full = yhat.mean(0)
+        ent_emp_full = (ws_emp_full * torch.log(ws_emp_full + eps)).sum().item()
+        ws_emp_full = ws_emp_full.data.cpu().numpy()
+
 
         if model.args.prior == 'vampprior_short':
             ent_model, ws_model = model.compute_class_entropy(classifier, dg, perm)   
@@ -357,6 +362,8 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         output['ws_emp'] = ws_emp
         output['ws_emp_full'] = ws_emp_full
         output['ent_emp'] = ent_emp
+        output['ent_emp_full'] = ent_emp_full
+
     
     return output
 
