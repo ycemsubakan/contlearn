@@ -171,7 +171,7 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
                  prev_model=None, use_mixw_cor=False, classifier=None, perm=None, 
-                 results_name=None, dg=0):
+                 results_name=None, dg=0, expert_classifier=None):
     
     # set loss to 0
     evaluate_loss = 0
@@ -259,13 +259,13 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
         # VISUALIZATION: plot generations and save them
         samples_rand = model.generate_x(1000)
-        if classifier != None:
-            yhat = F.softmax(classifier.forward(samples_rand), dim=1)
-            ws_emp = yhat.mean(0)[perm[:(dg+1)].long()]
-            eps = 1e-30
-            ent_emp = (ws_emp * torch.log(ws_emp + eps)).sum().item()
-            ws_emp = ws_emp.data.cpu().numpy()
-            ws_emp_full = yhat.mean(0).data.cpu().numpy()
+        
+        yhat = F.softmax(expert_classifier.forward(samples_rand), dim=1)
+        ws_emp = yhat.mean(0)[perm[:(dg+1)].long()]
+        eps = 1e-30
+        ent_emp = (ws_emp * torch.log(ws_emp + eps)).sum().item()
+        ws_emp = ws_emp.data.cpu().numpy()
+        ws_emp_full = yhat.mean(0).data.cpu().numpy()
 
         if model.args.prior == 'vampprior_short':
             ent_model, ws_model = model.compute_class_entropy(classifier, dg, perm)   

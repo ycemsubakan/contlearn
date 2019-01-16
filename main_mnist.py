@@ -159,6 +159,9 @@ print('load data')
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
+    arguments.dynamic_binarization = 1
+    arguments.input_type = 'binary'
+
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
@@ -241,17 +244,28 @@ results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
 print('classifier lr {}'.format(arguments.classifier_lr))
 
-# load the permutations
+expert_classifier = cls(arguments, 100, 784, Lclass=Lclass)
+# load the permutations and the expert classifiers
 if arguments.dataset_name == 'dynamic_mnist':
     permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+    expert_path = 'joint_models/joint_classifier_dynamic_mnistaccuracy_0.9725000262260437.t'
+
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
+    # dont yet have the file for omniglot
+
 elif arguments.dataset_name == 'mnist_plus_fmnist':
     permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_mila-CE0D_2019-01-1414:53:53.285461.t')
+    expert_path = 'joint_models/joint_classifier_mnist_plus_fmnistaccuracy_0.932200014591217.t'
+
 elif arguments.dataset_name == 'fashion_mnist':
     permutations = torch.load('fashion_mnistpermutations_seed2_mila-CE0D_2019-01-1517:29:07.967413.t')
+    expert_path = 'joint_models/joint_classifier_fashion_mnistaccuracy_0.8858000040054321.t'
+
+expert_classifier.load_state_dict(torch.load(expert_path))
 
 perm = permutations[arguments.permindex]
+
 
 model = VAE(arguments)
 if arguments.use_classifier:
@@ -264,6 +278,7 @@ if arguments.cuda:
     model = model.cuda()
     if arguments.use_classifier:
         classifier = classifier.cuda()
+    expert_classifier = expert_classifier.cuda()
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, Lclass):
@@ -350,7 +365,7 @@ for dg in range(0, Lclass):
                 all_results.append(temp[dg])
             except:
                 print('failed to open results for task {}, now getting evaluations'.format(dg))
-                results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
+                results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
                 results['digit'] = dg
                 if arguments.use_classifier: 
                     results['class'] = acc.item()
@@ -361,7 +376,7 @@ for dg in range(0, Lclass):
                 all_results.append(results)
                 pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
         else:
-            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier)
+            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
             results['digit'] = dg
             if arguments.use_classifier: 
                 results['class'] = acc.item()

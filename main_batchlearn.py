@@ -124,15 +124,18 @@ print('load data')
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
+    arguments.dynamic_binarization = True
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
 elif arguments.dataset_name == 'fashion_mnist': 
     Lclass = 10
     datapath = 'fashion_mnist_files'
+    arguments.dynamic_binarization = False 
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
     datapath = 'fashion_mnist_files'
+    arguments.dynamic_binarization = False
 
 train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
     
@@ -145,7 +148,6 @@ dt = next(iter(val_loader))
 vis.images(dt[0].reshape(-1, 1, 28, 28))
 ##
 
-arguments.dynamic_binarization = False
 
 from models.VAE import VAE
 
@@ -156,7 +158,7 @@ model_path = dr + '.model'
 
 
 ### classifier
-arguments.classifier_EP = 50
+arguments.classifier_EP = 75
 classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
 
 if arguments.cuda:
@@ -170,6 +172,11 @@ tr.train_classifier(arguments, train_loader, classifier=classifier,
 acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
 
 print('accuracy {}'.format(acc.item()))
+
+if not os.path.exists('joint_models/'):
+    os.mkdir('joint_models/')
+torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
+
 pdb.set_trace()
 
 
