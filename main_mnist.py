@@ -33,6 +33,9 @@ parser.add_argument('--epochs', type=int, default=2000, metavar='E',
                     help='number of epochs to train (default: 2000)')
 parser.add_argument('--lr', type=float, default=0.0005, metavar='LR',
                     help='learning rate (default: 0.0005)')
+parser.add_argument('--classifier_lr', type=float, default=0.0005, metavar='LR',
+                    help='learning rate for the classifier (default: 0.0005)')
+
 parser.add_argument('--early_stopping_epochs', type=int, default=50, metavar='ES',
                     help='number of epochs for early stopping')
 parser.add_argument('--warmup', type=int, default=100, metavar='WU',
@@ -163,10 +166,12 @@ elif arguments.dataset_name == 'fashion_mnist':
     Lclass = 10
     datapath = 'fashion_mnist_files'
     arguments.dynamic_binarization = 0
+    arguments.input_type = 'gray'
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
     datapath = 'mnist_plus_fmnist_files'
     arguments.dynamic_binarization = 0
+    arguments.input_type = 'binary'
 
 if not os.path.exists(datapath):
     train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
@@ -234,6 +239,7 @@ exp_details = 'permutation_' + str(arguments.permindex) + \
 
 results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
+print('classifier lr {}'.format(arguments.classifier_lr))
 
 # load the permutations
 if arguments.dataset_name == 'dynamic_mnist':
@@ -281,7 +287,7 @@ for dg in range(0, Lclass):
     model_path = cwd + files_path + model_name + '.model'
     
     if arguments.use_classifier:
-        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
+        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.classifier_lr)
 
         tr.train_classifier(arguments, train_loader, classifier=classifier, 
                             prev_classifier=prev_classifier,
