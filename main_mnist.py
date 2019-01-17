@@ -161,7 +161,6 @@ if arguments.dataset_name == 'dynamic_mnist':
     datapath = 'mnist_files/'
     arguments.dynamic_binarization = 1
     arguments.input_type = 'binary'
-
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'

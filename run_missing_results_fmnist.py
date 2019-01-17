@@ -94,8 +94,8 @@ for prior in PRIORS:
                             else:
                                 command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
 
-                            os.system(command)
-                            time.sleep(2)
+                            #os.system(command)
+                            #time.sleep(2)
 
 #print(found_files[:4])
 print('found files {}'.format(len(found_files)))
