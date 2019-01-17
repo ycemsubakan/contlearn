@@ -14,8 +14,8 @@ import math
 import torch.nn as nn
 import copy
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
-                    use_incoming_socket=False)
+#vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
+#                    use_incoming_socket=False)
 #assert vis.check_connection()
 
 
