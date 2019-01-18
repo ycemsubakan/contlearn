@@ -12,6 +12,8 @@ import time
 import os
 import pdb
 import itertools as it
+import torch.nn.functional as F
+import pickle
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 # ======================================================================================================================
@@ -168,7 +170,8 @@ def evaluate_vae_multihead(args, model, train_loader, data_loader, epoch, dr, mo
 
 
 def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode, 
-                 prev_model=None, use_mixw_cor=False):
+                 prev_model=None, use_mixw_cor=False, classifier=None, perm=None, 
+                 results_name=None, dg=0, expert_classifier=None):
     
     # set loss to 0
     evaluate_loss = 0
@@ -189,10 +192,10 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
             target = torch.cat([target, target], dim=0)
-        
-        if args.dataset_name == 'patch_celeba':
-            data = data.reshape(-1, int(np.prod(args.input_size)))
 
+        #if mode == 'validation':
+        #    x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+        
         # to avoid the singleton case (otherwise it breaks the code)
         if data.size(0) == 1:
             data = torch.cat([data, data], dim=0)
@@ -254,9 +257,31 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
 
         #plot_images(args, samples.data.cpu().numpy(), dir, 'reconstructions', size_x=5, size_y=5)
 
-        # VISUALIZATION: plot generations
-        if args.model_name != 'vrae':
-            samples_rand = model.generate_x(25)
+        # VISUALIZATION: plot generations and save them
+        samples_rand = model.generate_x(1000)
+        
+        yhat = F.softmax(expert_classifier.forward(samples_rand), dim=1)
+        
+        ws_emp = yhat.mean(0)[perm[:(dg+1)].long()]
+        eps = 1e-30
+        ent_emp = (ws_emp * torch.log(ws_emp + eps)).sum().item()
+        ws_emp = ws_emp.data.cpu().numpy()
+
+        ws_emp_full = yhat.mean(0)
+        ent_emp_full = (ws_emp_full * torch.log(ws_emp_full + eps)).sum().item()
+        ws_emp_full = ws_emp_full.data.cpu().numpy()
+
+
+        if model.args.prior == 'vampprior_short':
+            ent_model, ws_model = model.compute_class_entropy(classifier, dg, perm)   
+            ws_model = ws_model.data.cpu().numpy()
+            ent_model = ent_model.item() 
+
+        samples_path = 'gensamples_files/'
+        if not os.path.exists(samples_path):
+            os.mkdir(samples_path)
+        tosave = samples_rand.data.cpu().numpy()[:64]
+        pickle.dump(tosave, open(samples_path + 'task' + str(dg) + results_name + '.pk', 'wb'))
 
             #plot_images(args, samples_rand.data.cpu().numpy(), dir, 'generations', size_x=5, size_y=5)
 
@@ -280,13 +305,13 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         
         # CALCULATE lower-bound
         t_ll_s = time.time()
-        elbo_test = model.calculate_lower_bound(test_data, MB=args.MB).item()
+        elbo_test = model.calculate_lower_bound(test_data, MB=args.MB)
         t_ll_e = time.time()
         print('Test lower-bound value {:.2f} in time: {:.2f}s'.format(elbo_test, t_ll_e - t_ll_s))
 
         # CALCULATE lower-bound
         t_ll_s = time.time()
-        if not args.debug: elbo_train = model.calculate_lower_bound(full_data, MB=args.MB).item()
+        if not args.debug: elbo_train = model.calculate_lower_bound(full_data, MB=args.MB)
         else: elbo_train = -1
         t_ll_e = time.time()
         print('Train lower-bound value {} in time: {:.2f}s'.format(elbo_train, t_ll_e - t_ll_s))
@@ -330,11 +355,21 @@ def evaluate_vae(args, model, train_loader, data_loader, epoch, dr, mode,
         if args.semi_sup:
             output['test_acc'] = acc_test
             output['train_acc'] = acc_train
+        
+        if args.prior == 'vampprior_short':
+            output['ws_model'] = ws_model
+            output['ent_model'] = ent_model
+        output['ws_emp'] = ws_emp
+        output['ws_emp_full'] = ws_emp_full
+        output['ent_emp'] = ent_emp
+        output['ent_emp_full'] = ent_emp_full
+
     
     return output
 
 def evaluate_classifier(args, classifier, data_loader):
 
+    classifier.eval()
     all_lbls = []
     all_preds = []
 

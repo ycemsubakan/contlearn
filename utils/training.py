@@ -14,8 +14,8 @@ import math
 import torch.nn as nn
 import copy
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
-                    use_incoming_socket=False)
+#vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
+#                    use_incoming_socket=False)
 #assert vis.check_connection()
 
 
@@ -248,6 +248,10 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
                      classifier=None, prev_classifier=None, prev_model=None, 
                      optimizer_cls=None, dg=0):
 
+    classifier.train()
+    if prev_classifier != None:
+        prev_classifier.eval()
+
     # start training
     EP = args.classifier_EP
     for ep in range(EP):
@@ -259,15 +263,16 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             # to avoid the singleton case
             if data.size(0) == 1:
                 data = torch.cat([data, data], dim=0)
+                target = torch.cat([target, target], dim=0)
 
             optimizer_cls.zero_grad()
             yhat = classifier.forward(data)
             cent = nn.CrossEntropyLoss()
 
-            targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg])
-            if args.cuda:
-                targets = targets.cuda()
-            loss_cls = cent(yhat, targets)
+            #targets = torch.empty(yhat.size(0), dtype=torch.long).fill_(perm[dg])
+            #if args.cuda:
+            #    targets = targets.cuda()
+            loss_cls = cent(yhat, target)
 
             if dg > 0: 
                 if args.replay_size == 'increase':
@@ -290,6 +295,8 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
             optimizer_cls.step()
         
         print('EP {} batch {}, loss {}'.format(ep, batch_idx, loss_cls))
+
+
 
 
 def train_vae(epoch, args, train_loader, model, 
@@ -413,7 +420,7 @@ def train_vae(epoch, args, train_loader, model,
             loss = loss + loss_p
 
         if args.use_entrmax and (dg > 0):
-            nent = model.compute_class_entropy(classifier, dg, perm=perm)
+            nent, _ = model.compute_class_entropy(classifier, dg, perm=perm)
             loss = loss + nent
             if batch_idx % 300 == 0:
                 print('batch {}, loss {}, nent {}'.format(batch_idx, loss, nent))

@@ -7,7 +7,7 @@ import argparse
 import models 
 import copy
 import os
-import utilities as ut
+#import utilities as ut
 import pickle
 
 from utils.optimizer import AdamNormGrad
@@ -15,7 +15,7 @@ import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
                             use_incoming_socket=False)
 assert vis.check_connection()
 
@@ -85,9 +85,15 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
-                            help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+                            help='name of the dataset: static_mnist, dynamic_mnist, omniglot, fashion_mnist ,caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
 parser.add_argument('--dynamic_binarization', action='store_true', default=False,
                             help='allow dynamic binarization')
+parser.add_argument('--use_entrmax', type=int, default=0, help='whether or not to use entropy maximization, {0, 1}')
+# semi supervise
+parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
+parser.add_argument('--Lambda', type=float, default=1, help='weight of the classification loss')
+parser.add_argument('--debug', action='store_true', 
+                    help='debugging mode skips stuff')
 
 # notes
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
@@ -118,26 +124,30 @@ print('load data')
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
-    if not os.path.exists('mnist_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_mnist(train_loader, 'train')
-        ut.separate_mnist(val_loader, 'validation')
-        ut.separate_mnist(test_loader, 'test')
+    arguments.dynamic_binarization = True
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
-    if not os.path.exists('omniglot_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_omniglot(train_loader, 'train')
-        ut.separate_omniglot(val_loader, 'validation')
-        ut.separate_omniglot(test_loader, 'test')
+elif arguments.dataset_name == 'fashion_mnist': 
+    Lclass = 10
+    datapath = 'fashion_mnist_files'
+    arguments.dynamic_binarization = False 
+elif arguments.dataset_name == 'mnist_plus_fmnist': 
+    Lclass = 20
+    datapath = 'fashion_mnist_files'
+    arguments.dynamic_binarization = False
 
+train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+    
+#train_loader = ut.get_mnist_loaders([9], 'train', arguments, path=datapath)
+#val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
+#test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
+#
+#
+dt = next(iter(val_loader))
+vis.images(dt[0].reshape(-1, 1, 28, 28))
+##
 
-train_loader = ut.get_mnist_loaders(list(range(10)), 'train', arguments, path=datapath)
-val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
-test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
-
-arguments.dynamic_binarization = False
 
 from models.VAE import VAE
 
@@ -146,8 +156,34 @@ model_name = results_name = arguments.dataset_name + '_' + exp_details
 dr = files_path + model_name
 model_path = dr + '.model'
 
-model = VAE(arguments).cuda()
 
+### classifier
+arguments.classifier_EP = 75
+classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
+
+if arguments.cuda:
+    classifier = classifier.cuda()
+
+optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
+
+tr.train_classifier(arguments, train_loader, classifier=classifier, 
+                    optimizer_cls=optimizer_cls)
+
+acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+
+print('accuracy {}'.format(acc.item()))
+
+if not os.path.exists('joint_models/'):
+    os.mkdir('joint_models/')
+torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
+
+pdb.set_trace()
+
+
+### generator
+model = VAE(arguments)
+if arguments.cuda:
+    model = model.cuda()
 
 if 0 & os.path.exists(model_path):
     print('loading model...')
@@ -157,26 +193,10 @@ if 0 & os.path.exists(model_path):
 else:
     print('training model...')
     optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
-    model = model.cuda()
     tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                       optimizer, dr, arguments.model_name) 
                       
 results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test')
 pickle.dump(results, open(results_path + results_name + '.pk', 'wb')) 
 
-### classifier
-classifier = cls(arguments, 100, 784, Lclass=Lclass)
 
-if arguments.cuda:
-    classifier = classifier.cuda()
-
-optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
-
-tr.train_classifier(arguments, train_loader, classifier=classifier, 
-                    prev_classifier=prev_classifier,
-                    prev_model=prev_model,
-                    optimizer_cls=optimizer_cls, dg=dg, perm=perm)
-
-acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
-
-print('accuracy {}'.format(acc.item()))

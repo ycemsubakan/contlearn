@@ -22,6 +22,9 @@ parser.add_argument('--use_visdom', type=int, default=0,
                     help='use/not use visdom, {0, 1}')
 parser.add_argument('--debug', action='store_true', 
                     help='debugging mode skips stuff')
+parser.add_argument('--load_models', action='store_true', 
+                    help='load already trained models and obtained results (checkpointing)')
+
 parser.add_argument('--batch_size', type=int, default=100, metavar='BStrain',
                     help='input batch size for training (default: 100)')
 parser.add_argument('--test_batch_size', type=int, default=100, metavar='BStest',
@@ -30,6 +33,9 @@ parser.add_argument('--epochs', type=int, default=2000, metavar='E',
                     help='number of epochs to train (default: 2000)')
 parser.add_argument('--lr', type=float, default=0.0005, metavar='LR',
                     help='learning rate (default: 0.0005)')
+parser.add_argument('--classifier_lr', type=float, default=0.0005, metavar='LR',
+                    help='learning rate for the classifier (default: 0.0005)')
+
 parser.add_argument('--early_stopping_epochs', type=int, default=50, metavar='ES',
                     help='number of epochs for early stopping')
 parser.add_argument('--warmup', type=int, default=100, metavar='WU',
@@ -82,7 +88,7 @@ parser.add_argument('--MB', type=int, default=100, metavar='MBLL',
 
 # dataset
 parser.add_argument('--dataset_name', type=str, default='dynamic_mnist', metavar='DN',
-                    help='name of the dataset: static_mnist, dynamic_mnist, omniglot, caltech101silhouettes, histopathologyGray, freyfaces, cifar10, celeba')
+                    help='name of the dataset: dynamic_mnist, omniglot, fashion_mnist, mnist_plus_fmnist')
 parser.add_argument('--permindex', type=int, default=1, 
                     help='permutation index, integer in [0, 1000)' )
 parser.add_argument('--dynamic_binarization', type=int, default=1,
@@ -99,10 +105,10 @@ parser.add_argument('--classifier_EP', type=int, default='75', help='number of i
 parser.add_argument('--use_vampmixingw', type=int, default=1, help='Whether or not to use mixing weights in vamp prior, acceptable inputs: 0 1')
 parser.add_argument('--separate_means', type=int, default=0, help='whether or not to separate the cluster means in the latent space, in {0, 1}')
 parser.add_argument('--restart_means', type=int, default=1, help='whether or not to re-initialize the the cluster means in the latent space, in {0, 1}')
-parser.add_argument('--use_classifier', type=int, default=0, help='whether or not to use a classifier to balance the classes, in {0, 1}')
+parser.add_argument('--use_classifier', type=int, default=1, help='whether or not to use a classifier to balance the classes, in {0, 1}')
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
-parser.add_argument('--use_entrmax', type=int, default=0, help='whether or not to use entropy maximization, {0, 1}')
+parser.add_argument('--use_entrmax', type=int, default=1, help='whether or not to use entropy maximization, {0, 1}')
 
 # semi supervise
 parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
@@ -117,13 +123,14 @@ parser.add_argument('--notes', type=str, default='', help='comments on the exper
 # continually training without replay
 
 # for mnist, need to repeat the experiments with bernoulli cost  
+tstart = time.time()
 
 arguments = parser.parse_args()
 arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 if arguments.use_visdom:
-    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev',
+    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
                     use_incoming_socket=False)
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
@@ -148,22 +155,31 @@ if not os.path.exists(results_path):
 print('load data')
 
 # Dataset preparation
+
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
-    if not os.path.exists('mnist_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_mnist(train_loader, 'train')
-        ut.separate_mnist(val_loader, 'validation')
-        ut.separate_mnist(test_loader, 'test')
+    arguments.dynamic_binarization = 1
+    arguments.input_type = 'binary'
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
-    if not os.path.exists('omniglot_files'):
-        train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-        ut.separate_omniglot(train_loader, 'train')
-        ut.separate_omniglot(val_loader, 'validation')
-        ut.separate_omniglot(test_loader, 'test')
+elif arguments.dataset_name == 'fashion_mnist': 
+    Lclass = 10
+    datapath = 'fashion_mnist_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'gray'
+elif arguments.dataset_name == 'mnist_plus_fmnist': 
+    Lclass = 20
+    datapath = 'mnist_plus_fmnist_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'binary'
+
+if not os.path.exists(datapath):
+    train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+    ut.separate_datasets(train_loader, 'train', Lclass, datapath)
+    ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
+    ut.separate_datasets(val_loader, 'test', Lclass, datapath)
 
 
 #C = 29 
@@ -225,14 +241,30 @@ exp_details = 'permutation_' + str(arguments.permindex) + \
 
 results_name = arguments.dataset_name + '_' + exp_details
 print(results_name)
+print('classifier lr {}'.format(arguments.classifier_lr))
 
-# load the permutations
+expert_classifier = cls(arguments, 100, 784, Lclass=Lclass)
+# load the permutations and the expert classifiers
 if arguments.dataset_name == 'dynamic_mnist':
     permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+    expert_path = 'joint_models/joint_classifier_dynamic_mnistaccuracy_0.9725000262260437.t'
+
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
+    # dont yet have the file for omniglot
+
+elif arguments.dataset_name == 'mnist_plus_fmnist':
+    permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_mila-CE0D_2019-01-1414:53:53.285461.t')
+    expert_path = 'joint_models/joint_classifier_mnist_plus_fmnistaccuracy_0.932200014591217.t'
+
+elif arguments.dataset_name == 'fashion_mnist':
+    permutations = torch.load('fashion_mnistpermutations_seed2_mila-CE0D_2019-01-1517:29:07.967413.t')
+    expert_path = 'joint_models/joint_classifier_fashion_mnistaccuracy_0.8858000040054321.t'
+
+expert_classifier.load_state_dict(torch.load(expert_path))
 
 perm = permutations[arguments.permindex]
+
 
 model = VAE(arguments)
 if arguments.use_classifier:
@@ -245,9 +277,14 @@ if arguments.cuda:
     model = model.cuda()
     if arguments.use_classifier:
         classifier = classifier.cuda()
+    expert_classifier = expert_classifier.cuda()
 
 # implement proper sampling with vamp, learn the weights too.  
 for dg in range(0, Lclass):
+    
+    if dg == 0:
+        prev_model = None
+        prev_classifier = None
 
     print('\n________________________')
     print('starting task {}'.format(dg))
@@ -255,19 +292,16 @@ for dg in range(0, Lclass):
 
     train_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'train', arguments, 
                                         path=datapath)
-    val_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'validation', arguments, path=datapath)
+    val_loader = ut.get_mnist_loaders([int(perm[dg].item())], 'validation', arguments, path=datapath, model=prev_model, dg=dg)
     test_loader = ut.get_mnist_loaders(list(perm[list(range(dg+1))].numpy().astype('int')), 'test', arguments, path=datapath)
     
     model_name = arguments.dataset_name + str(dg) + '_' + exp_details
     dr = files_path + model_name 
 
     model_path = cwd + files_path + model_name + '.model'
-    if dg == 0:
-        prev_model = None
-        prev_classifier = None
-
+    
     if arguments.use_classifier:
-        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.lr)
+        optimizer_cls = AdamNormGrad(classifier.parameters(), lr=arguments.classifier_lr)
 
         tr.train_classifier(arguments, train_loader, classifier=classifier, 
                             prev_classifier=prev_classifier,
@@ -277,7 +311,7 @@ for dg in range(0, Lclass):
         acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
-    if arguments.debug and os.path.exists(model_path):
+    if (arguments.debug or arguments.load_models) and os.path.exists(model_path):
         print('loading model... for digit {}'.format(dg))
 
         model.load_state_dict(torch.load(model_path))
@@ -315,7 +349,7 @@ for dg in range(0, Lclass):
                 _, prior_class_ass = model.balance_mixingw(classifier, dg=dg, perm=perm, dont_balance=True)
             if arguments.semi_sup: 
                 _, prior_class_ass = model.balance_mixingw(dg=dg, perm=perm, dont_balance=True)
-            post_class_ass = prior_class_ass
+            post_class_ass = copy.deepcopy(prior_class_ass)
                     
     if (dg > 0) and arguments.separate_means:
         model.merge_latent()
@@ -323,16 +357,35 @@ for dg in range(0, Lclass):
 
     # when doing the hyperparameter search, pay attention to what results you are saving
     if 1: 
-        results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction)
-        results['digit'] = dg
-        if arguments.use_classifier: 
-            results['class'] = acc.item()
-        results['time'] = t2 - t1
-        results['epochs'] = EPconv
-        results['prior_class_ass'] = prior_class_ass
-        results['post_class_ass'] = post_class_ass
-        all_results.append(results)
-        pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        if arguments.load_models: 
+            try:
+                print('trying to open results for task {}'.format(dg))
+                temp = pickle.load(open(results_path + results_name + '.pk', 'rb'))
+                all_results.append(temp[dg])
+            except:
+                print('failed to open results for task {}, now getting evaluations'.format(dg))
+                results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
+                results['digit'] = dg
+                if arguments.use_classifier: 
+                    results['class'] = acc.item()
+                results['time'] = t2 - t1
+                results['epochs'] = EPconv
+                results['prior_class_ass'] = prior_class_ass
+                results['post_class_ass'] = post_class_ass
+                all_results.append(results)
+                pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+        else:
+            results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
+            results['digit'] = dg
+            if arguments.use_classifier: 
+                results['class'] = acc.item()
+            results['time'] = t2 - t1
+            results['epochs'] = EPconv
+            results['prior_class_ass'] = prior_class_ass
+            results['post_class_ass'] = post_class_ass
+            all_results.append(results)
+            pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
+
     
     if arguments.replay_type == 'replay': 
         prev_model = copy.deepcopy(model)
@@ -354,3 +407,5 @@ for dg in range(0, Lclass):
     else:
         model.restart_latent_space()
 
+    tend = time.time()
+    print('elapsed time: {}, task {}'.format(tend-tstart, dg))
