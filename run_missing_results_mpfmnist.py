@@ -12,7 +12,7 @@ except:
     host = 'cedar'
 print(host)
 
-path = 'results_massimo'
+path = 'results_files'
 files = os.listdir(path)
 
 filesf = []
@@ -28,7 +28,7 @@ REPLAYS = ['increase', 'constant']
 add_cap = 1
 vamp_mix = 1
 DYNAMIC_BINARIZATION = [0]
-PERM_RANGE = [0]
+PERM_RANGE = [2]
 
 all_combs = 0 
 found_files = []
@@ -83,9 +83,9 @@ for prior in PRIORS:
                             --permindex %(permid)s \
                             --use_replaycostcorrection %(costc)s \
                             --classifier_lr 0.0005 \
-                            --dataset_name fashion_mnist \
-                            --notes fmnistb2" % locals()
-                            # --load_models \
+                            --dataset_name mnist_plus_fmnist \
+                            --load_models \
+                            --notes mpfmnistb2" % locals()
 
                             #print(command)
                     
@@ -94,8 +94,8 @@ for prior in PRIORS:
                             else:
                                 command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
 
-                            #os.system(command)
-                            #time.sleep(2)
+                            os.system(command)
+                            time.sleep(2)
 
 #print(found_files[:4])
 print('found files {}'.format(len(found_files)))
