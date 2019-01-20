@@ -48,9 +48,11 @@ def compile_results(models, path, T=10):
 
     all_lls = []
     all_cls = []
+    all_ents = []
     for i, mdl in enumerate(models): 
         test_lls = []
         test_cls = []
+        ents = []
 
         NC = 0
         for fl in mdl:
@@ -65,22 +67,27 @@ def compile_results(models, path, T=10):
             except:
                 temp2 = [100*res['test_acc'] for res in results]
 
+            temp3 = [res['ent_emp'] for res in results]
+
             if (len(temp1) == T):  #(('permutation_0' in fl) or ('permutation_3' in fl)):
                 test_lls.append(temp1)
                 test_cls.append(temp2)
+                ents.append(temp3)
                 NC = NC + 1
 
         test_lls = -np.array(test_lls)
         test_cls = np.array(test_cls)
+        ents = np.array(ents)
 
         all_ll_means.append( (test_lls.mean(0), fl)  )
 
         all_lls.append( (test_lls, fl) ) 
         all_cls.append( (test_cls, fl) ) 
+        all_ents.append( (ents, fl) )
 
         NCs.append(NC)
 
-    return all_lls, all_cls, all_ll_means, NCs
+    return all_lls, all_cls, all_ents, all_ll_means, NCs
 
 def plotting(results, NCs=None, mode='ML', group='all'):
     if NCs == None:
@@ -95,7 +102,7 @@ def plotting(results, NCs=None, mode='ML', group='all'):
             if 'standard' in fl: lbl += 'VAE'
             elif 'vampprior' in fl: lbl += 'VampPrior'
 
-            if 'replay_size_increase' in fl: 
+            if 'replay_size_increase' in fl:
                 lbl += ' + Increasing'
                 linear = 1
 
@@ -103,9 +110,9 @@ def plotting(results, NCs=None, mode='ML', group='all'):
                 if not linear:
                     lbl += ' + Cost_Correction'
                 linear = 1
-            
+
             if 'entrmax_1' in fl: lbl += ' + MaxEnt'
-            
+
             if 'use_mixingw_correction_1' in fl:
                 if 'semi_sup_1' in fl:
                     lbl += ' + Semi_Supervised_Rebalancing'
@@ -124,12 +131,13 @@ def plotting(results, NCs=None, mode='ML', group='all'):
                     lbl = 'CGAN + Increasing'
                 else:
                     lbl = 'GAN + Increasing'
-        
+
         if group=='constant' and linear:
             continue
         if group=='linear' and not linear:
             continue
         plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
+
 
 def plot_cumulative(Fig_dir, Dataset, list_filename, list_task, list_seed, list_complexity):
     style_c = cycle(['-', '--', ':', '-.'])
@@ -259,14 +267,14 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
 
     legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 
-    test_lls, test_cls, test_means, NCs = compile_results(models, path=path, T=T)
+    test_lls, test_cls, ents, test_means, NCs = compile_results(models, path=path, T=T)
     print('completion status ', NCs)
 
 
     #for group in ['all', 'constant', 'linear']:
     for group in ['constant', 'linear']:
 
-        #VAE
+        #### VAE
 
         colors = 'rbmkycgrbmrbmkycgrbm'
         markers = 'oxv^oxv^oxv^oxv^'
@@ -276,7 +284,8 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
             title_ += ' -- O(1) solutions'
         if group == 'linear':
             title_ += ' -- O(t) solutions'
-
+        
+        # Plot likelihoods
         plt.figure(figsize=figsize, dpi=dpi)
         plotting(test_lls, NCs, group=group)
         plt.xlabel('Task id')
@@ -286,6 +295,17 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.title(title_)
         plt.savefig(writepath + 'likelihood_'+group+ '_' + dataset + '.eps', format='eps')
 
+        # Plot entropies
+        plt.figure(figsize=figsize, dpi=dpi)
+        plotting(ents, NCs, group=group)
+        plt.xlabel('Task id')
+        plt.ylabel('Class Distribution Entropy')
+        plt.legend()
+        add_ticks(dataset)
+        plt.title(title_)
+        plt.savefig(writepath + 'entropies_'+group+ '_' + dataset + '.eps', format='eps')
+       
+        # Plot accuracy
         plt.figure(figsize=figsize, dpi=dpi)
         plotting(test_cls, NCs, group=group)
         plt.xlabel('Task id')
@@ -294,7 +314,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         add_ticks(dataset)
         plt.title(title_)
 
-        # GAN images
+        #### GAN images
         colors = 'rbmkycgrbmrbmkycgrbm'
         markers = '>s<>s<>s<>s<'
 
@@ -328,7 +348,6 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.legend()
         add_ticks(dataset)
         plt.savefig(writepath + 'classification_' + group + '_' + dataset + '.eps', format='eps')
-
 
 
 
