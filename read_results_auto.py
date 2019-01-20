@@ -10,6 +10,10 @@ import sys
 from itertools import cycle
 from copy import deepcopy
 
+import seaborn as sns
+sns.set(font_scale=2.0)  # Make sure everything is readable.
+sns.set_style("whitegrid")
+
 
 def get_label(method, model, Fix_complexity):
 
@@ -32,8 +36,8 @@ def get_label(method, model, Fix_complexity):
 
     return label
 
-def add_ticks(argv):
-    if argv[1] == 'mnist_plus_fmnist':
+def add_ticks(dataset):
+    if dataset == 'mnist_plus_fmnist':
         plt.xticks(range(20), range(20))
     else:
         plt.xticks(range(10), range(10))
@@ -65,7 +69,8 @@ def compile_results(models, path, T=10):
                 test_lls.append(temp1)
                 test_cls.append(temp2)
                 NC = NC + 1
-        test_lls = np.array(test_lls)
+
+        test_lls = -np.array(test_lls)
         test_cls = np.array(test_cls)
 
         all_ll_means.append( (test_lls.mean(0), fl)  )
@@ -125,7 +130,6 @@ def plotting(results, NCs=None, mode='ML', group='all'):
         if group=='linear' and not linear:
             continue
         plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
-
 
 def plot_cumulative(Fig_dir, Dataset, list_filename, list_task, list_seed, list_complexity):
     style_c = cycle(['-', '--', ':', '-.'])
@@ -194,139 +198,136 @@ def plot_cumulative(Fig_dir, Dataset, list_filename, list_task, list_seed, list_
     return all_cls
                  
         
-dataset = sys.argv[1]
+for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
 
-if dataset == 'mnist':
-    path = 'select_files_mnist/'
-    T = 10
-    perms = list(range(5))
-    title = 'MNIST'
-elif dataset == 'fmnist':
-    path = 'select_files_fmnist/'
-    T = 10
-    perms = list(range(5))
-    title = 'Fashion MNIST'
-elif dataset == 'mnist_plus_fmnist':
-    path = 'select_files_mpfmnist/'
-    T = 20
-    perms = list(range(4))
-    title = 'MNIST + FashionMNIST'
+    if dataset == 'mnist':
+        path = 'select_files_mnist/'
+        T = 10
+        perms = list(range(10))
+        title = 'MNIST'
+    elif dataset == 'fmnist':
+        path = 'select_files_fmnist/'
+        T = 10
+        perms = list(range(5))
+        title = 'Fashion MNIST'
+    elif dataset == 'mnist_plus_fmnist':
+        path = 'select_files_mpfmnist/'
+        T = 20
+        perms = list(range(5))
+        title = 'MNIST + FashionMNIST'
 
-files = os.listdir(path)
+    files = os.listdir(path)
 
-ganresultspath = "everything.pk"
-if sys.argv[2] == None:
-    writepath = './'
-else:
-    writepath = sys.argv[2]
+    ganresultspath = "everything.pk"
+    writepath = 'figs/'
 
-filesf = []
-priors = ['vampprior_short', 'standard']
-replays = ['replay_size_increase', 'replay_size_constant']
-mixingw_cor = ['use_mixingw_correction_0', 'use_mixingw_correction_1']
-cost_cor = ['costcorrection_0', 'costcorrection_1']
-maxent = ['use_entrmax_1', 'use_entrmax_0']
+    filesf = []
+    priors = ['vampprior_short', 'standard']
+    replays = ['replay_size_increase', 'replay_size_constant']
+    mixingw_cor = ['use_mixingw_correction_0', 'use_mixingw_correction_1']
+    cost_cor = ['costcorrection_0', 'costcorrection_1']
+    maxent = ['use_entrmax_1', 'use_entrmax_0']
 
-models = [] 
+    models = [] 
 
-i = 0
-for pr in priors:
-    for rp in replays:
-        for mc in mixingw_cor:
-            for cc in cost_cor:
-                for me in maxent:
-                    models.append([])
-                    for fl in files:
-                        if (pr in fl) and (rp in fl) and (mc in fl) and (cc in fl) and (me in fl):
+    i = 0
+    for pr in priors:
+        for rp in replays:
+            for mc in mixingw_cor:
+                for cc in cost_cor:
+                    for me in maxent:
+                        models.append([])
+                        for fl in files:
+                            if (pr in fl) and (rp in fl) and (mc in fl) and (cc in fl) and (me in fl):
 
-                            permconds = [(('permutation_' + str(pr))in fl) for pr in perms]
-                            if np.sum(permconds):
-                                models[i].append(fl)    
-                    
-                    # deal with non-existing combinations
-                    if len(models[i]) == 0:
-                        models.pop()    
-                    else: 
-                        i = i +  1
-                        print(len(models[-1]))
+                                permconds = [(('permutation_' + str(pr))in fl) for pr in perms]
+                                if np.sum(permconds):
+                                    models[i].append(fl)    
+                        
+                        # deal with non-existing combinations
+                        if len(models[i]) == 0:
+                            models.pop()    
+                        else: 
+                            i = i +  1
+                            print(len(models[-1]))
 
-test_lls = []
-colors = 'rbmkycgrbmrbmkycgrbm'
-markers = 'oxv^oxv^oxv^oxv^'
-figsize=[20, 10]
-dpi = 96
-
-legends = ['1', '2', '3', '4', '5', '6', '7', '8']
-
-test_lls, test_cls, test_means, NCs = compile_results(models, path=path, T=T)
-print('completion status ', NCs)
-
-
-#for group in ['all', 'constant', 'linear']:
-for group in ['constant', 'linear']:
-
-    #VAE
-
+    test_lls = []
     colors = 'rbmkycgrbmrbmkycgrbm'
     markers = 'oxv^oxv^oxv^oxv^'
-    
-    title_ = title
-    if group == 'constant':
-        title_ += ' -- O(1) solutions'
-    if group == 'linear':
-        title_ += ' -- O(t) solutions'
+    figsize=[8, 8]
+    dpi = 96
 
-    plt.figure(figsize=figsize, dpi=dpi)
-    plotting(test_lls, NCs, group=group)
-    plt.xlabel('Task id')
-    plt.ylabel('Test Average Negative LogLikelihood')
-    plt.legend()
-    add_ticks(sys.argv)
-    plt.title(title_)
-    plt.savefig(writepath + 'likelihood_'+group+ '_' + sys.argv[1] + '.eps', format='eps')
+    legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 
-    plt.figure(figsize=figsize, dpi=dpi)
-    plotting(test_cls, NCs, group=group)
-    plt.xlabel('Task id')
-    plt.ylabel('Test Classification Accuracy')
-    plt.legend()
-    add_ticks(sys.argv)
-    plt.title(title_)
-
-    # GAN images
-    colors = 'rbmkycgrbmrbmkycgrbm'
-    markers = '>s<>s<>s<>s<'
+    test_lls, test_cls, test_means, NCs = compile_results(models, path=path, T=T)
+    print('completion status ', NCs)
 
 
-    Fig_dir = os.path.join('.')
-    if sys.argv[1] == 'mnist':
-        list_dataset = ['mnist']
-    elif sys.argv[1] == 'mnist_plus_fmnist':
-        list_dataset = ['mnishion']
-    elif sys.argv[1] == 'fmnist':
-        list_dataset = ['fashion']
+    #for group in ['all', 'constant', 'linear']:
+    for group in ['constant', 'linear']:
 
-    list_complexity = [True, False] # True means Unbalanced, False means Balanced
-    list_seed_mnist = ['0','1','2','3','4','5','6','7','8','9']
-    list_seed_mnishion = ['0','1','2','3','4']
-    list_task = ['disjoint']
-    data = pickle.load(open(ganresultspath, "rb"))
+        #VAE
 
-    for dataset in list_dataset:
-        if dataset == "mnist" or dataset=="fashion":
-            list_seed = list_seed_mnist
-        elif dataset == "mnishion":
-            list_seed = list_seed_mnishion
-        else:
-            ValueError("Dataset not implemented")
-    test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
+        colors = 'rbmkycgrbmrbmkycgrbm'
+        markers = 'oxv^oxv^oxv^oxv^'
+        
+        title_ = title
+        if group == 'constant':
+            title_ += ' -- O(1) solutions'
+        if group == 'linear':
+            title_ += ' -- O(t) solutions'
 
-    plotting(test_cls_gan, mode='GAN', group=group)
-    plt.xlabel('Task id')
-    plt.ylabel('Test Classification Accuracy')
-    plt.legend()
-    add_ticks(sys.argv)
-    plt.savefig(writepath + 'classification_' + group + '_' + sys.argv[1] + '.eps', format='eps')
+        plt.figure(figsize=figsize, dpi=dpi)
+        plotting(test_lls, NCs, group=group)
+        plt.xlabel('Task id')
+        plt.ylabel('Test Average LogLikelihood')
+        plt.legend()
+        add_ticks(dataset)
+        plt.title(title_)
+        plt.savefig(writepath + 'likelihood_'+group+ '_' + dataset + '.eps', format='eps')
+
+        plt.figure(figsize=figsize, dpi=dpi)
+        plotting(test_cls, NCs, group=group)
+        plt.xlabel('Task id')
+        plt.ylabel('Test Classification Accuracy')
+        plt.legend()
+        add_ticks(dataset)
+        plt.title(title_)
+
+        # GAN images
+        colors = 'rbmkycgrbmrbmkycgrbm'
+        markers = '>s<>s<>s<>s<'
+
+
+        Fig_dir = os.path.join('.')
+        if dataset == 'mnist':
+            list_dataset = ['mnist']
+        elif dataset == 'mnist_plus_fmnist':
+            list_dataset = ['mnishion']
+        elif dataset == 'fmnist':
+            list_dataset = ['fashion']
+
+        list_complexity = [True, False] # True means Unbalanced, False means Balanced
+        list_seed_mnist = ['0','1','2','3','4','5','6','7','8','9']
+        list_seed_mnishion = ['0','1','2','3','4']
+        list_task = ['disjoint']
+        data = pickle.load(open(ganresultspath, "rb"))
+
+        for dataset in list_dataset:
+            if dataset == "mnist" or dataset=="fashion":
+                list_seed = list_seed_mnist
+            elif dataset == "mnishion":
+                list_seed = list_seed_mnishion
+            else:
+                ValueError("Dataset not implemented")
+        test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
+
+        plotting(test_cls_gan, mode='GAN', group=group)
+        plt.xlabel('Task id')
+        plt.ylabel('Test Classification Accuracy')
+        plt.legend()
+        add_ticks(dataset)
+        plt.savefig(writepath + 'classification_' + group + '_' + dataset + '.eps', format='eps')
 
 
 
