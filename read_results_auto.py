@@ -111,7 +111,10 @@ def plotting(results, NCs=None, mode='ML', group='all', plot_std=True):
                     lbl += ' + Cost_Correction'
                 linear = 1
 
-            if 'entrmax_1' in fl: lbl += ' + MaxEnt'
+            if 'entrmax_1' in fl:
+                if linear:
+                    continue
+                lbl += ' + MaxEnt'
 
             if 'use_mixingw_correction_1' in fl:
                 if 'semi_sup_1' in fl:
@@ -141,10 +144,11 @@ def plotting(results, NCs=None, mode='ML', group='all', plot_std=True):
             #pdb.set_trace()
             #best_result_mean = np.mean(best_result, axis=0)
             std = np.std(res, axis=0)
+            std *= 0.5
             #plt.plot(range(num_task), best_result_mean, label=label, linestyle=next(style_c))
             plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
             plt.fill_between(np.arange(res.shape[1]), res.mean(0) - std,
-                                         res.mean(0) + std, alpha=0.4)
+                                         res.mean(0) + std, color=colors[i], alpha=0.4)
         else:
             plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
 
