@@ -89,7 +89,7 @@ def compile_results(models, path, T=10):
 
     return all_lls, all_cls, all_ents, all_ll_means, NCs
 
-def plotting(results, NCs=None, mode='ML', group='all'):
+def plotting(results, NCs=None, mode='ML', group='all', plot_std=True):
     if NCs == None:
         NCs = [1]*len(results)
 
@@ -136,7 +136,17 @@ def plotting(results, NCs=None, mode='ML', group='all'):
             continue
         if group=='linear' and not linear:
             continue
-        plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
+
+        if plot_std:
+            #pdb.set_trace()
+            #best_result_mean = np.mean(best_result, axis=0)
+            std = np.std(res, axis=0)
+            #plt.plot(range(num_task), best_result_mean, label=label, linestyle=next(style_c))
+            plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
+            plt.fill_between(np.arange(res.shape[1]), res.mean(0) - std,
+                                         res.mean(0) + std, alpha=0.4)
+        else:
+            plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
 
 
 def plot_cumulative(Fig_dir, Dataset, list_filename, list_task, list_seed, list_complexity):
@@ -216,7 +226,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
     elif dataset == 'fmnist':
         path = 'select_files_fmnist/'
         T = 10
-        perms = list(range(5))
+        perms = list(range(10))
         title = 'Fashion MNIST'
     elif dataset == 'mnist_plus_fmnist':
         path = 'select_files_mpfmnist/'
