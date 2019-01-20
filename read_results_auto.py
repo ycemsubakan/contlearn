@@ -45,9 +45,11 @@ def compile_results(models, path, T=10):
 
     all_lls = []
     all_cls = []
+    all_ents = []
     for i, mdl in enumerate(models): 
         test_lls = []
         test_cls = []
+        ents = []
 
         NC = 0
         for fl in mdl:
@@ -62,21 +64,26 @@ def compile_results(models, path, T=10):
             except:
                 temp2 = [100*res['test_acc'] for res in results]
 
+            temp3 = [res['ent_emp'] for res in results]
+
             if (len(temp1) == T):  #(('permutation_0' in fl) or ('permutation_3' in fl)):
                 test_lls.append(temp1)
                 test_cls.append(temp2)
+                ents.append(temp3)
                 NC = NC + 1
         test_lls = np.array(test_lls)
         test_cls = np.array(test_cls)
+        ents = np.array(ents)
 
         all_ll_means.append( (test_lls.mean(0), fl)  )
 
         all_lls.append( (test_lls, fl) ) 
         all_cls.append( (test_cls, fl) ) 
+        all_ents.append( (ents, fl) )
 
         NCs.append(NC)
 
-    return all_lls, all_cls, all_ll_means, NCs
+    return all_lls, all_cls, all_ents, all_ll_means, NCs
 
 def plotting(results, NCs=None, mode='ML'):
     if NCs == None:
@@ -176,7 +183,7 @@ dataset = sys.argv[1]
 if dataset == 'mnist':
     path = 'select_files_mnist/'
     T = 10
-    perms = list(range(5))
+    perms = list(range(10))
     title = 'MNIST'
 elif dataset == 'fmnist':
     path = 'select_files_fmnist/'
@@ -191,7 +198,7 @@ elif dataset == 'mnist_plus_fmnist':
 
 files = os.listdir(path)
 
-ganresultspath = "/home/cem/Downloads/everything.pk"
+ganresultspath = "/home/cem/Downloads/everything (1).pk"
 if sys.argv[2] == None:
     writepath = './'
 else:
@@ -269,8 +276,8 @@ elif sys.argv[1] == 'fmnist':
     list_dataset = ['fashion']
 
 list_complexity = [True, False] # True means Unbalanced, False means Balanced
-list_seed_mnist = ['1','2','3','4','5','6','7','8','9']
-list_seed_mnishion = ['0','1','2']
+list_seed_mnist = ['1','2','3','4','5','6','7','8','9', '10']
+list_seed_mnishion = ['0','1','2', '3', '4']
 list_task = ['disjoint']
 data = pickle.load(open(ganresultspath, "rb"))
 
@@ -289,7 +296,6 @@ plt.ylabel('Test Classification Accuracy')
 plt.legend()
 add_ticks(sys.argv)
 plt.savefig(writepath + 'classification' + sys.argv[1] + '.eps', format='eps')
-
 
 plt.show()
 
