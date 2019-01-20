@@ -38,7 +38,6 @@ def add_ticks(argv):
     else:
         plt.xticks(range(10), range(10))
 
-
 def compile_results(models, path, T=10):
     all_ll_means = []
     NCs = []
@@ -78,29 +77,53 @@ def compile_results(models, path, T=10):
 
     return all_lls, all_cls, all_ll_means, NCs
 
-def plotting(results, NCs=None, mode='ML'):
+def plotting(results, NCs=None, mode='ML', group='all'):
     if NCs == None:
         NCs = [1]*len(results)
 
     for i, (res, fl) in enumerate(results):
-        
+
+        linear = 0
+
         if mode == 'ML':
             lbl = ''
             if 'standard' in fl: lbl += 'VAE'
             elif 'vampprior' in fl: lbl += 'VampPrior'
 
-            if 'replay_size_increase' in fl: lbl += ' + Increasing'
+            if 'replay_size_increase' in fl: 
+                lbl += ' + Increasing'
+                linear = 1
 
-            if 'costcorrection_1' in fl: lbl += ' + Cost_Correction'
+            if 'costcorrection_1' in fl:
+                if not linear:
+                    lbl += ' + Cost_Correction'
+                linear = 1
+            
+            if 'entrmax_1' in fl: lbl += ' + MaxEnt'
             
             if 'use_mixingw_correction_1' in fl:
                 if 'semi_sup_1' in fl:
                     lbl += ' + Semi_Supervised_Rebalancing'
                 if 'useclassifier_1' in fl:
                     lbl += ' + SepClassifierRebalancing'
-        else:
-            lbl = fl
 
+        elif mode=='GAN':
+            if 'unbalanced' in fl:
+                if 'CGAN' in fl:
+                    lbl = 'CGAN'
+                else:
+                    lbl = 'GAN'
+            else:
+                linear = 1
+                if 'CGAN' in fl:
+                    lbl = 'CGAN + Increasing'
+                else:
+                    lbl = 'GAN + Increasing'
+        
+        if group=='constant' and linear:
+            continue
+        if group=='linear' and not linear:
+            continue
         plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
 
 
@@ -191,7 +214,7 @@ elif dataset == 'mnist_plus_fmnist':
 
 files = os.listdir(path)
 
-ganresultspath = "/home/cem/Downloads/everything.pk"
+ganresultspath = "everything.pk"
 if sys.argv[2] == None:
     writepath = './'
 else:
@@ -238,57 +261,76 @@ legends = ['1', '2', '3', '4', '5', '6', '7', '8']
 test_lls, test_cls, test_means, NCs = compile_results(models, path=path, T=T)
 print('completion status ', NCs)
 
-plt.figure(figsize=figsize, dpi=dpi)
-plotting(test_lls, NCs)
-plt.xlabel('Task id')
-plt.ylabel('Test Average Negative LogLikelihood')
-plt.legend()
-add_ticks(sys.argv)
-plt.title(title)
-plt.savefig(writepath + 'likelihood_' + sys.argv[1] + '.eps', format='eps')
 
-plt.figure(figsize=figsize, dpi=dpi)
-plotting(test_cls, NCs)
-plt.xlabel('Task id')
-plt.ylabel('Test Classification Accuracy')
-plt.legend()
-add_ticks(sys.argv)
-plt.title(title)
+#for group in ['all', 'constant', 'linear']:
+for group in ['constant', 'linear']:
 
-# GAN images
-colors = 'rbmkycgrbmrbmkycgrbm'
-markers = '>s<>s<>s<>s<'
+    #VAE
+
+    colors = 'rbmkycgrbmrbmkycgrbm'
+    markers = 'oxv^oxv^oxv^oxv^'
+    
+    title_ = title
+    if group == 'constant':
+        title_ += ' -- O(1) solutions'
+    if group == 'linear':
+        title_ += ' -- O(t) solutions'
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    plotting(test_lls, NCs, group=group)
+    plt.xlabel('Task id')
+    plt.ylabel('Test Average Negative LogLikelihood')
+    plt.legend()
+    add_ticks(sys.argv)
+    plt.title(title_)
+    plt.savefig(writepath + 'likelihood_'+group+ '_' + sys.argv[1] + '.eps', format='eps')
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    plotting(test_cls, NCs, group=group)
+    plt.xlabel('Task id')
+    plt.ylabel('Test Classification Accuracy')
+    plt.legend()
+    add_ticks(sys.argv)
+    plt.title(title_)
+
+    # GAN images
+    colors = 'rbmkycgrbmrbmkycgrbm'
+    markers = '>s<>s<>s<>s<'
 
 
-Fig_dir = os.path.join('.')
-if sys.argv[1] == 'mnist':
-    list_dataset = ['mnist']
-elif sys.argv[1] == 'mnist_plus_fmnist':
-    list_dataset = ['mnishion']
-elif sys.argv[1] == 'fmnist':
-    list_dataset = ['fashion']
+    Fig_dir = os.path.join('.')
+    if sys.argv[1] == 'mnist':
+        list_dataset = ['mnist']
+    elif sys.argv[1] == 'mnist_plus_fmnist':
+        list_dataset = ['mnishion']
+    elif sys.argv[1] == 'fmnist':
+        list_dataset = ['fashion']
 
-list_complexity = [True, False] # True means Unbalanced, False means Balanced
-list_seed_mnist = ['1','2','3','4','5','6','7','8','9']
-list_seed_mnishion = ['0','1','2']
-list_task = ['disjoint']
-data = pickle.load(open(ganresultspath, "rb"))
+    list_complexity = [True, False] # True means Unbalanced, False means Balanced
+    list_seed_mnist = ['0','1','2','3','4','5','6','7','8','9']
+    list_seed_mnishion = ['0','1','2','3','4']
+    list_task = ['disjoint']
+    data = pickle.load(open(ganresultspath, "rb"))
 
-for dataset in list_dataset:
-    if dataset == "mnist" or dataset=="fashion":
-        list_seed = list_seed_mnist
-    elif dataset == "mnishion":
-        list_seed = list_seed_mnishion
-    else:
-        ValueError("Dataset not implemented")
-test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
+    for dataset in list_dataset:
+        if dataset == "mnist" or dataset=="fashion":
+            list_seed = list_seed_mnist
+        elif dataset == "mnishion":
+            list_seed = list_seed_mnishion
+        else:
+            ValueError("Dataset not implemented")
+    test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
 
-plotting(test_cls_gan, mode='GAN')
-plt.xlabel('Task id')
-plt.ylabel('Test Classification Accuracy')
-plt.legend()
-add_ticks(sys.argv)
-plt.savefig(writepath + 'classification' + sys.argv[1] + '.eps', format='eps')
+    plotting(test_cls_gan, mode='GAN', group=group)
+    plt.xlabel('Task id')
+    plt.ylabel('Test Classification Accuracy')
+    plt.legend()
+    add_ticks(sys.argv)
+    plt.savefig(writepath + 'classification_' + group + '_' + sys.argv[1] + '.eps', format='eps')
+
+
+
+
 
 
 plt.show()
