@@ -111,7 +111,10 @@ def plotting(results, NCs=None, mode='ML', group='all', plot_std=True):
                     lbl += ' + Cost_Correction'
                 linear = 1
 
-            if 'entrmax_1' in fl: lbl += ' + MaxEnt'
+            if 'entrmax_1' in fl:
+                if linear:
+                    continue
+                lbl += ' + MaxEnt'
 
             if 'use_mixingw_correction_1' in fl:
                 if 'semi_sup_1' in fl:
@@ -141,10 +144,11 @@ def plotting(results, NCs=None, mode='ML', group='all', plot_std=True):
             #pdb.set_trace()
             #best_result_mean = np.mean(best_result, axis=0)
             std = np.std(res, axis=0)
+            std *= 0.5
             #plt.plot(range(num_task), best_result_mean, label=label, linestyle=next(style_c))
             plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
             plt.fill_between(np.arange(res.shape[1]), res.mean(0) - std,
-                                         res.mean(0) + std, alpha=0.4)
+                                         res.mean(0) + std, color=colors[i], alpha=0.4)
         else:
             plt.plot(np.arange(res.shape[1]), res.mean(0), '-' + colors[i] + markers[i], label=lbl + str(NCs[i]))
 
@@ -296,7 +300,8 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
             title_ += ' -- O(t) solutions'
         
         # Plot likelihoods
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
+        #set_rasterized(True)
         plotting(test_lls, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Test Average LogLikelihood')
@@ -306,7 +311,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.savefig(writepath + 'likelihood_'+group+ '_' + dataset + '.eps', format='eps')
 
         # Plot entropies
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
         plotting(ents, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Class Distribution Entropy')
@@ -316,7 +321,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.savefig(writepath + 'entropies_'+group+ '_' + dataset + '.eps', format='eps')
        
         # Plot accuracy
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
         plotting(test_cls, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Test Classification Accuracy')
@@ -343,14 +348,14 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         list_task = ['disjoint']
         data = pickle.load(open(ganresultspath, "rb"))
 
-        for dataset in list_dataset:
-            if dataset == "mnist" or dataset=="fashion":
+        for dataset_ in list_dataset:
+            if dataset_ == "mnist" or dataset_ =="fashion":
                 list_seed = list_seed_mnist
-            elif dataset == "mnishion":
+            elif dataset_ == "mnishion":
                 list_seed = list_seed_mnishion
             else:
                 ValueError("Dataset not implemented")
-        test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
+        test_cls_gan = plot_cumulative(Fig_dir, dataset_, data, list_task, list_seed, list_complexity)
 
         plotting(test_cls_gan, mode='GAN', group=group)
         plt.xlabel('Task id')
