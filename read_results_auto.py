@@ -300,7 +300,8 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
             title_ += ' -- O(t) solutions'
         
         # Plot likelihoods
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
+        #set_rasterized(True)
         plotting(test_lls, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Test Average LogLikelihood')
@@ -310,7 +311,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.savefig(writepath + 'likelihood_'+group+ '_' + dataset + '.eps', format='eps')
 
         # Plot entropies
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
         plotting(ents, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Class Distribution Entropy')
@@ -320,7 +321,7 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         plt.savefig(writepath + 'entropies_'+group+ '_' + dataset + '.eps', format='eps')
        
         # Plot accuracy
-        plt.figure(figsize=figsize, dpi=dpi)
+        plt.figure(figsize=figsize, dpi=dpi).set_rasterized(True)
         plotting(test_cls, NCs, group=group)
         plt.xlabel('Task id')
         plt.ylabel('Test Classification Accuracy')
@@ -347,14 +348,14 @@ for dataset in ['mnist', 'fmnist','mnist_plus_fmnist']:
         list_task = ['disjoint']
         data = pickle.load(open(ganresultspath, "rb"))
 
-        for dataset in list_dataset:
-            if dataset == "mnist" or dataset=="fashion":
+        for dataset_ in list_dataset:
+            if dataset_ == "mnist" or dataset_ =="fashion":
                 list_seed = list_seed_mnist
-            elif dataset == "mnishion":
+            elif dataset_ == "mnishion":
                 list_seed = list_seed_mnishion
             else:
                 ValueError("Dataset not implemented")
-        test_cls_gan = plot_cumulative(Fig_dir, dataset, data, list_task, list_seed, list_complexity)
+        test_cls_gan = plot_cumulative(Fig_dir, dataset_, data, list_task, list_seed, list_complexity)
 
         plotting(test_cls_gan, mode='GAN', group=group)
         plt.xlabel('Task id')
