@@ -12,7 +12,7 @@ except:
     host = 'cedar'
 print(host)
 
-path = 'results_files'
+path = 'results_massimo'
 files = os.listdir(path)
 
 filesf = []

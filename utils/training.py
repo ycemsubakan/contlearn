@@ -14,7 +14,7 @@ import math
 import torch.nn as nn
 import copy
 
-#vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
+#vis = visdom.Visdom(port=5800, server='', env='',
 #                    use_incoming_socket=False)
 #assert vis.check_connection()
 
@@ -421,7 +421,7 @@ def train_vae(epoch, args, train_loader, model,
 
         if args.use_entrmax and (dg > 0):
             nent, _ = model.compute_class_entropy(classifier, dg, perm=perm)
-            loss = loss + nent
+            loss = loss + (args.lambda_ent * nent)
             if batch_idx % 300 == 0:
                 print('batch {}, loss {}, nent {}'.format(batch_idx, loss, nent))
 

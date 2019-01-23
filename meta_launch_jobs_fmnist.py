@@ -10,8 +10,8 @@ except:
     host = 'cedar'
 print(host)
 
-PRIORS = ['vampprior_short', 'standard']
-REPLAYS = ['increase', 'constant']
+PRIORS = ['standard'] #['vampprior_short', 'standard']
+REPLAYS = ['constant'] #['increase', 'constant']
 ADD_CAP = [1]
 #CLASSIFIER = [1]
 #REBALANCES = [0, 1]
@@ -20,14 +20,15 @@ DYNAMIC_BINARIZATION = [0]
 ENTR_MAX = [1]
 
 if host == 'cedar':
-    PERM_RANGE = range(2, 5)
+    PERM_RANGE = range(0, 10)
 else: 
-    PERM_RANGE = range(5, 10)
+    PERM_RANGE = [5]
 
 # dopnt iterate through them now
 add_cap = ADD_CAP[0]
 vamp_mix = VAMP_MIX[0]
 
+cnt = 0 
 for prior in PRIORS:
     if prior == 'vampprior_short':
         REBALANCES = [0, 1]
@@ -42,7 +43,7 @@ for prior in PRIORS:
                     if (prior == 'vampprior_short') and replay == 'constant':
                         COSTC = [0, 1]
                     else: 
-                        COSTC = [1]
+                        COSTC = [0]
 
                     for costc in COSTC:
                         
@@ -58,16 +59,28 @@ for prior in PRIORS:
                         --use_replaycostcorrection %(costc)s \
                         --classifier_lr 0.0005 \
                         --dataset_name fashion_mnist \
-                        --notes fmnistb2" % locals()
+                        --notes fmnistvae" % locals()
                         # --load_models \
-                
-                        print(command)
                 
                         if host == 'cedar':
                             command = "{} cc_launch_cl.sh {}".format(sys.argv[1], command) 
-                        else:
+                        elif host == 'graham':
                             command = "{} cc_launch_cl_graham.sh {}".format(sys.argv[1], command) 
+                        elif host == 'azure':
+                            
+                            if cnt % 4 == 0:
+                                command = "{} azure0.sh {}".format(sys.argv[1], command) 
+                            elif cnt % 4 == 1:
+                                command = "{} azure1.sh {}".format(sys.argv[1], command) 
+                            elif cnt % 4 == 2:
+                                command = "{} azure2.sh {}".format(sys.argv[1], command) 
+                            elif cnt % 4 == 3:
+                                command = "{} azure3.sh {}".format(sys.argv[1], command) 
 
+                            cnt = cnt + 1
+
+                        print(command)
+                
                         os.system(command)
                         time.sleep(2)
 

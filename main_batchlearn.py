@@ -15,7 +15,7 @@ import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
 
-vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
+vis = visdom.Visdom(port=5800, server='', env='',
                             use_incoming_socket=False)
 assert vis.check_connection()
 
@@ -121,21 +121,25 @@ if not os.path.exists(results_path):
 print('load data')
 #train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
 
+
 if arguments.dataset_name == 'dynamic_mnist':
     Lclass = 10
     datapath = 'mnist_files/'
-    arguments.dynamic_binarization = True
+    arguments.dynamic_binarization = 1
+    arguments.input_type = 'binary'
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
 elif arguments.dataset_name == 'fashion_mnist': 
     Lclass = 10
-    datapath = 'fashion_mnist_files'
-    arguments.dynamic_binarization = False 
+    datapath = 'fashion_mnist_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'gray'
 elif arguments.dataset_name == 'mnist_plus_fmnist': 
     Lclass = 20
-    datapath = 'fashion_mnist_files'
-    arguments.dynamic_binarization = False
+    datapath = 'mnist_plus_fmnist_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'binary'
 
 train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
     
@@ -157,29 +161,27 @@ dr = files_path + model_name
 model_path = dr + '.model'
 
 
-### classifier
-arguments.classifier_EP = 75
-classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
-
-if arguments.cuda:
-    classifier = classifier.cuda()
-
-optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
-
-tr.train_classifier(arguments, train_loader, classifier=classifier, 
-                    optimizer_cls=optimizer_cls)
-
-acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
-
-print('accuracy {}'.format(acc.item()))
-
-if not os.path.exists('joint_models/'):
-    os.mkdir('joint_models/')
-torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
-
-pdb.set_trace()
-
-
+#### classifier
+#arguments.classifier_EP = 75
+#classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
+#
+#if arguments.cuda:
+#    classifier = classifier.cuda()
+#
+#optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
+#
+#tr.train_classifier(arguments, train_loader, classifier=classifier, 
+#                    optimizer_cls=optimizer_cls)
+#
+#acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+#
+#print('accuracy {}'.format(acc.item()))
+#
+#if not os.path.exists('joint_models/'):
+#    os.mkdir('joint_models/')
+#torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
+#
+#
 ### generator
 model = VAE(arguments)
 if arguments.cuda:

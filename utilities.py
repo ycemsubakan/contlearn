@@ -5,7 +5,6 @@ import torch.nn.utils.rnn as rnn_utils
 import torch.utils.data as data_utils
 import os
 import torch.nn.init as torchinit
-import pandas as pd
 from torchvision import datasets, transforms
 import itertools as it
 import copy

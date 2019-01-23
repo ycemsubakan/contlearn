@@ -16,7 +16,7 @@ import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
 
-parser = argparse.ArgumentParser(description='Multitask experiments')
+parser = argparse.ArgumentParser(description='continual learning MEGR')
 
 parser.add_argument('--use_visdom', type=int, default=0, 
                     help='use/not use visdom, {0, 1}')
@@ -113,6 +113,7 @@ parser.add_argument('--use_entrmax', type=int, default=1, help='whether or not t
 # semi supervise
 parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
 parser.add_argument('--Lambda', type=float, default=1, help='weight of the classification loss')
+parser.add_argument('--lambda_ent', type=float, default=1, help='weight on the entropy term')
 
 parser.add_argument('--notes', type=str, default='', help='comments on the experiment')
 
@@ -130,7 +131,7 @@ arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 if arguments.use_visdom:
-    vis = visdom.Visdom(port=5800, server='http://cem@nmf.cs.illinois.edu', env='cem_dev2',
+    vis = visdom.Visdom(port=5800, server='', env='',
                     use_incoming_socket=False)
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
@@ -246,19 +247,19 @@ print('classifier lr {}'.format(arguments.classifier_lr))
 expert_classifier = cls(arguments, 100, 784, Lclass=Lclass)
 # load the permutations and the expert classifiers
 if arguments.dataset_name == 'dynamic_mnist':
-    permutations = torch.load('mnistpermutations_seed2_cdr305.int.cedar.computecanada.ca_2019-01-0613:31:06.234041.t')
+    permutations = torch.load('mnistpermutations_seed2_2019-01-0613:31:06.234041.t')
     expert_path = 'joint_models/joint_classifier_dynamic_mnistaccuracy_0.9725000262260437.t'
 
 elif arguments.dataset_name == 'omniglot':
-    permutations = torch.load('omniglotpermutations_seed2_cdr352.int.cedar.computecanada.ca_2019-01-1105:32:33.684197.t')
+    permutations = torch.load('omniglotpermutations_seed2_2019-01-1105:32:33.684197.t')
     # dont yet have the file for omniglot
 
 elif arguments.dataset_name == 'mnist_plus_fmnist':
-    permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_mila-CE0D_2019-01-1414:53:53.285461.t')
+    permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_2019-01-1414:53:53.285461.t')
     expert_path = 'joint_models/joint_classifier_mnist_plus_fmnistaccuracy_0.932200014591217.t'
 
 elif arguments.dataset_name == 'fashion_mnist':
-    permutations = torch.load('fashion_mnistpermutations_seed2_mila-CE0D_2019-01-1517:29:07.967413.t')
+    permutations = torch.load('fashion_mnistpermutations_seed2_2019-01-1517:29:07.967413.t')
     expert_path = 'joint_models/joint_classifier_fashion_mnistaccuracy_0.8858000040054321.t'
 
 expert_classifier.load_state_dict(torch.load(expert_path))
