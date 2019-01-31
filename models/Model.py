@@ -27,7 +27,7 @@ class Model(nn.Module):
         if self.args.prior == 'vampprior': 
             self.means = NonLinear(self.args.number_components_init, np.prod(self.args.input_size), bias=False, activation=nonlinearity)
         elif self.args.prior == 'vampprior_short':
-            self.means = NonLinear(self.args.number_components_init, 300, bias=False, activation=nonlinearity)
+            self.means = NonLinear(self.args.number_components_init, self.Khid, bias=False, activation=nonlinearity)
 
         if self.args.use_vampmixingw:
             self.mixingw = NonLinear(self.args.number_components_init, 1, bias=False, activation=nn.Softmax(dim=0))

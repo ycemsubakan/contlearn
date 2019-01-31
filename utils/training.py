@@ -123,7 +123,7 @@ def experiment_vae_multihead(arguments, train_loader, val_loader, test_loader,
 
 def experiment_vae(arguments, train_loader, val_loader, test_loader, 
                    model, optimizer, dr, model_name='vae', prev_model=None, 
-                   classifier=None, prev_classifier=None, optimizer_cls=None, perm=torch.arange(10), dg=0):
+                   classifier=None, prev_classifier=None, optimizer_cls=None, perm=torch.arange(10), dg=0, vis=None):
     from utils.evaluation import evaluate_vae as evaluate
     from utils.helpers import print_and_log_scalar
 
@@ -151,7 +151,7 @@ def experiment_vae(arguments, train_loader, val_loader, test_loader,
         model, train_results = train_vae(epoch, 
                         arguments, train_loader, model, optimizer, classifier=classifier, 
                         prev_classifier=prev_classifier, prev_model=prev_model,  
-                        optimizer_cls=optimizer_cls, perm=perm, dg=dg)
+                        optimizer_cls=optimizer_cls, perm=perm, dg=dg, vis=vis)
 
         # merge the means for evaluation and sampling
         if (dg > 0) and arguments.separate_means: 
@@ -301,7 +301,7 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
 
 def train_vae(epoch, args, train_loader, model, 
               optimizer, classifier=None, prev_classifier=None, prev_model=None, 
-              optimizer_cls=None, perm=torch.arange(10), dg=0):
+              optimizer_cls=None, perm=torch.arange(10), dg=0, vis=None):
 
     # set loss to 0
     train_loss = 0

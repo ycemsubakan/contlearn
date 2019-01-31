@@ -4,18 +4,21 @@ import pdb
 import datetime 
 import os
 import socket
+import sys
 
 timestamp = str(datetime.datetime.now()).replace(' ','')
 hostname = socket.gethostname()
 
 #dataset = 'mnist_plus_fmnist_m1'
-dataset = 'fashion_mnist'
+dataset = sys.argv[1]
 if dataset in ['mnist', 'fashion_mnist']:
     T = 10 
 elif dataset in ['mnist_plus_fmnist_m1', 'mnist_plus_fmnist_m2']:
     T = 20
 elif dataset == 'omniglot':
     T = 50
+elif dataset == 'omniglot_char':
+    T = 100
 
 Nperms = 1000
 
@@ -36,4 +39,4 @@ arangemat[0] = torch.arange(T)
 
 print(arangemat[:10])
 
-torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + hostname + '_' + timestamp + '.t')
+torch.save(arangemat, dataset + 'permutations_seed' + str(seed) + '_' + timestamp + '.t')

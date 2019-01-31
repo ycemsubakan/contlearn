@@ -423,6 +423,68 @@ def load_omniglot(args, n_validation=4000, **kwargs):
 
     return train_loader, val_loader, test_loader, args
 
+def load_omniglot_char(args, n_validation=4000, **kwargs):
+    # set args
+    args.input_size = [1, 28, 28]
+    args.input_type = 'binary'
+    args.dynamic_binarization = True
+
+    # start processing
+    def reshape_data(data):
+        return data.reshape((-1, 28, 28)).reshape((-1, 28*28), order='fortran')
+    omni_raw = loadmat(os.path.join('datasets', 'OMNIGLOT', 'chardata.mat'))
+
+    # train and test data
+    train_ft = reshape_data(omni_raw['data'].T.astype('float32'))
+    #train_tar = omni_raw['targetchar'].squeeze() - 1
+    zipped_tar = zip(list(omni_raw['target'].argmax(0)), list(omni_raw['targetchar'].squeeze() -1))
+    train_tar =  [j + 50*i for (i,j) in zipped_tar]
+    unique = list(np.unique(train_tar))
+    train_tar_un = np.array([unique.index(tar) for tar in train_tar])
+
+    x_test = reshape_data(omni_raw['testdata'].T.astype('float32'))
+    #y_test = omni_raw['testtargetchar'].squeeze() - 1
+    zipped_tartest = zip(list(omni_raw['testtarget'].argmax(0)), list(omni_raw['testtargetchar'].squeeze() -1))
+    test_tar =  [j + 50*i for (i,j) in zipped_tartest]
+    unique = list(np.unique(test_tar))
+    y_test = np.array([unique.index(tar) for tar in test_tar])
+
+    # shuffle train data
+    randperm = np.random.permutation(train_ft.shape[0])
+    train_ft = train_ft[randperm]
+    train_tar = train_tar_un[randperm]
+
+    #np.random.shuffle(train_ft)
+    #np.random.shuffle(train_tar)
+
+    # set train and validation data
+    x_train = train_ft[:-n_validation]
+    x_val = train_ft[-n_validation:]
+
+    y_train = train_tar[:-n_validation] 
+    y_val = train_tar[-n_validation:] 
+
+    train = data_utils.TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
+    train_loader = data_utils.DataLoader(train, batch_size=args.batch_size, shuffle=True, **kwargs)
+
+    validation = data_utils.TensorDataset(torch.from_numpy(x_val).float(), torch.from_numpy(y_val))
+    val_loader = data_utils.DataLoader(validation, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+
+    test = data_utils.TensorDataset(torch.from_numpy(x_test).float(), torch.from_numpy(y_test))
+    test_loader = data_utils.DataLoader(test, batch_size=args.test_batch_size, shuffle=True, **kwargs)
+
+    # setting pseudo-inputs inits
+    if args.use_training_data_init == 1:
+        args.pseudoinputs_std = 0.01
+        init = x_train[0:args.number_components].T
+        args.pseudoinputs_mean = torch.from_numpy( init + args.pseudoinputs_std * np.random.randn(np.prod(args.input_size), args.number_components) ).float()
+    else:
+        args.pseudoinputs_mean = 0.05
+        args.pseudoinputs_std = 0.01
+
+    return train_loader, val_loader, test_loader, args
+
+
 # ======================================================================================================================
 def load_caltech101silhouettes(args, **kwargs):
     # set args
@@ -647,6 +709,8 @@ def load_dataset(args, **kwargs):
         train_loader, val_loader, test_loader, args = load_fashion_mnist(args, **kwargs)
     elif args.dataset_name == 'mnist_plus_fmnist':
         train_loader, val_loader, test_loader, args = load_mnist_plus_fmnist(args, **kwargs)
+    elif args.dataset_name == 'omniglot_char':
+        train_loader, val_loader, test_loader, args = load_omniglot_char(args, **kwargs)
     else:
         raise Exception('There is no support for such dataset name')
 

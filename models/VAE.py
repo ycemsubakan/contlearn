@@ -34,24 +34,53 @@ class VAE(Model):
     def __init__(self, args):
         super(VAE, self).__init__(args)
 
-        # encoder: q(z | x)
-        self.q_z_layers = nn.ModuleList([nn.Sequential(
-            GatedDense(np.prod(self.args.input_size), 300),
-            GatedDense(300, 300)
-        )])
+        Khid = 40 
+        arc = 'conv'
+        self.Khid = Khid
+        self.arc = arc
+         
+        if arc == 'ff':
+            # encoder: q(z | x)
+            self.q_z_layers = nn.ModuleList([nn.Sequential(
+                GatedDense(np.prod(self.args.input_size), Khid),
+                GatedDense(Khid, Khid)
+            )])
 
-        self.q_z_mean = Linear(300, self.args.z1_size)
-        self.q_z_logvar = NonLinear(300, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
+            self.q_z_mean = Linear(Khid, self.args.z1_size)
+            self.q_z_logvar = NonLinear(Khid, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
 
-        # decoder: p(x | z)
-        self.p_x_layers = nn.Sequential(
-            GatedDense(self.args.z1_size, 300),
-            GatedDense(300, 300)
-        )
+            # decoder: p(x | z)
+            self.p_x_layers = nn.Sequential(
+                GatedDense(self.args.z1_size, Khid),
+                GatedDense(Khid, Khid)
+            )
 
-        #if self.args.input_type == 'binary':
-        self.p_x_mean = nn.ModuleList([NonLinear(300, np.prod(self.args.input_size), 
-                                                 activation=nn.Sigmoid())])
+            #if self.args.input_type == 'binary':
+            self.p_x_mean = nn.ModuleList([GatedDense(Khid, np.prod(self.args.input_size), 
+                                                     activation=nn.Sigmoid())])
+        elif arc == 'conv':
+            act = None
+            self.q_z_layers = nn.ModuleList([nn.Sequential(
+                GatedConv2d(self.args.input_size[0], 32, 3, 2, 1, activation=act),
+                GatedConv2d(32, 32, 3, 2, 1, activation=act),
+                GatedConv2d(32, Khid, 7, 1, 0, activation=act),
+            )])
+
+            self.q_z_mean = Linear(Khid, self.args.z1_size)
+            self.q_z_logvar = NonLinear(Khid, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
+
+            self.p_x_layers = nn.Sequential(
+                GatedConvTranspose2d(Khid, 32, 7, 1, 0, activation=act),
+                GatedConvTranspose2d(32, 32, 3, 2, 1, activation=act),
+                GatedConvTranspose2d(32, self.args.input_size[0], 4, 2, 0, activation=nn.Sigmoid())
+            )
+
+            #if self.args.input_type == 'binary':
+            #self.p_x_mean = nn.ModuleList([GatedDense(Khid, np.prod(self.args.input_size), 
+            #                                         activation=nn.Sigmoid())])
+
+        
+        
         #elif self.args.input_type in ['gray', 'continuous', 'color']:
         #    self.p_x_mean = NonLinear(300, np.prod(self.args.input_size), activation=nn.Sigmoid())
         #    self.p_x_logvar = NonLinear(300, np.prod(self.args.input_size), activation=nn.Hardtanh(min_val=-4.5,max_val=0))
@@ -59,8 +88,10 @@ class VAE(Model):
 
         # weights initialization
         for m in self.modules():
-            if isinstance(m, nn.Linear):
+            if isinstance(m, nn.Linear): # or isinstance(m, nn.ConvTranspose2d):
                 he_init(m)
+
+        
 
         # add pseudo-inputs if VampPrior
         if self.args.prior in ['vampprior', 'vampprior_short']:
@@ -168,7 +199,7 @@ class VAE(Model):
             else:
                 self.idle_input = torch.eye(self.args.number_components,
                                             self.args.number_components)
-                us_new = NonLinear(self.args.number_components, 300, bias=False, activation=nonlinearity)
+                us_new = NonLinear(self.args.number_components, self.Khid, bias=False, activation=nonlinearity)
                 if self.args.cuda:
                     self.idle_input = self.idle_input.cuda()
                     us_new = us_new.cuda()
@@ -211,7 +242,10 @@ class VAE(Model):
         yhat_means_soft = F.softmax(classifier.forward(means))
         pis = self.mixingw(self.idle_input).squeeze()
         
-        curr_per_class_weight = torch.matmul(pis, yhat_means_soft)
+        if self.args.number_components == 1:
+            curr_per_class_weight = yhat_means_soft
+        else:
+            curr_per_class_weight = torch.matmul(pis, yhat_means_soft)
         
         yhat_means = torch.argmax(classifier.forward(means), dim=1)
         
@@ -423,8 +457,12 @@ class VAE(Model):
                 else:
                     pis = torch.from_numpy(self.mixingw_c) * pis
 
-            clsts = np.random.choice(range(self.args.number_components), N, 
-                                     p=pis.data.cpu().numpy())
+            if self.args.number_components == 1:
+                clsts = np.random.choice(range(self.args.number_components), N, 
+                                         p=[1])
+            else:
+                clsts = np.random.choice(range(self.args.number_components), N, 
+                                         p=pis.data.cpu().numpy())
 
             if self.args.separate_means:
                 K = self.means[head].linear.weight.size(1)
@@ -478,6 +516,10 @@ class VAE(Model):
 
     # THE MODEL: VARIATIONAL POSTERIOR
     def q_z(self, x, head=0):
+        if self.arc == 'conv':
+            if self.args.dataset_name in ['omniglot_char']:
+                x = x.reshape(-1, 1, 28, 28)
+
         x = self.q_z_layers[head](x)
 
         x = x.squeeze()
@@ -489,19 +531,15 @@ class VAE(Model):
     # THE MODEL: GENERATIVE DISTRIBUTION
     def p_x(self, z, head=0):
 
-        if self.args.dataset_name == 'celeba':
+        if self.arc == 'conv':
             z = z.unsqueeze(-1).unsqueeze(-1)
-        z = self.p_x_layers(z)
-
-        x_mean = self.p_x_mean[head](z)
+            x_mean = self.p_x_layers(z)
+        else: 
+            z = self.p_x_layers(z)
+            x_mean = self.p_x_mean[head](z)
         
-        #if self.args.input_type == 'binary':
         x_logvar = 0.
-        #else:
-        #x_mean = torch.clamp(x_mean, min=0.+1./512., max=1.-1./512.)
-
-            #x_logvar = self.p_x_logvar[head](z)
-
+        
         x_mean = x_mean.reshape(x_mean.size(0), -1)
         if self.args.dataset_name == 'celeba':
             x_logvar = x_logvar.reshape(x_logvar.size(0), -1)

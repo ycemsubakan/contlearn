@@ -7,17 +7,13 @@ import argparse
 import models 
 import copy
 import os
-#import utilities as ut
+import utilities as ut
 import pickle
 
 from utils.optimizer import AdamNormGrad
 import utils.evaluation as ev
 import utils.training as tr 
 from models.VAE import classifier as cls
-
-vis = visdom.Visdom(port=5800, server='', env='',
-                            use_incoming_socket=False)
-assert vis.check_connection()
 
 parser = argparse.ArgumentParser(description='Multitask experiments')
 
@@ -106,6 +102,14 @@ if arguments.cuda:
     torch.cuda.manual_seed(arguments.seed)
 np.random.seed(arguments.seed)
 
+if arguments.use_visdom:
+    vis = visdom.Visdom(port=5800, server='', env='',
+                                use_incoming_socket=False)
+    assert vis.check_connection()
+
+
+
+
 # directories FOR SAVING
 files_path = 'model_files/'
 results_path = 'results_files/'
@@ -140,16 +144,32 @@ elif arguments.dataset_name == 'mnist_plus_fmnist':
     datapath = 'mnist_plus_fmnist_files/'
     arguments.dynamic_binarization = 0
     arguments.input_type = 'binary'
+elif arguments.dataset_name == 'omniglot_char':
+    Lclass = 100
+    datapath = 'omniglot_char_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'binary'
 
-train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
-    
+if not os.path.exists(datapath):
+    train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+    ut.separate_datasets(train_loader, 'train', Lclass, datapath)
+    ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
+    ut.separate_datasets(test_loader, 'test', Lclass, datapath)
+
+
+train_loader = ut.get_mnist_loaders(list(range(Lclass)), 'train', arguments, path=datapath)
+test_loader = ut.get_mnist_loaders(list(range(Lclass)), 'test', arguments, path=datapath)
+val_loader = ut.get_mnist_loaders(list(range(Lclass)), 'validation', arguments, path=datapath)
+
+
 #train_loader = ut.get_mnist_loaders([9], 'train', arguments, path=datapath)
 #val_loader = ut.get_mnist_loaders(list(range(10)), 'validation', arguments, path=datapath)
 #test_loader = ut.get_mnist_loaders(list(range(10)), 'test', arguments, path=datapath)
 #
 #
-dt = next(iter(val_loader))
-vis.images(dt[0].reshape(-1, 1, 28, 28))
+#dt = next(iter(val_loader))
+#pdb.set_trace()
+#vis.images(dt[0].reshape(-1, 1, 28, 28))
 ##
 
 
@@ -162,25 +182,27 @@ model_path = dr + '.model'
 
 
 #### classifier
-#arguments.classifier_EP = 75
-#classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
-#
-#if arguments.cuda:
-#    classifier = classifier.cuda()
-#
-#optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
-#
-#tr.train_classifier(arguments, train_loader, classifier=classifier, 
-#                    optimizer_cls=optimizer_cls)
-#
-#acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
-#
-#print('accuracy {}'.format(acc.item()))
-#
-#if not os.path.exists('joint_models/'):
-#    os.mkdir('joint_models/')
-#torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
-#
+arguments.classifier_EP = 75
+classifier = cls(arguments, 100, 784, Lclass=Lclass, architecture='ff')
+
+if arguments.cuda:
+    classifier = classifier.cuda()
+
+optimizer_cls = AdamNormGrad(classifier.parameters(), lr=1e-3)
+
+tr.train_classifier(arguments, train_loader, classifier=classifier, 
+                    optimizer_cls=optimizer_cls)
+
+acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+
+print('accuracy {}'.format(acc.item()))
+
+if not os.path.exists('joint_models/'):
+    os.mkdir('joint_models/')
+torch.save(classifier.state_dict(), 'joint_models/joint_classifier_' + arguments.dataset_name + 'accuracy_{}'.format(acc) + '.t') 
+
+pdb.set_trace()
+
 #
 ### generator
 model = VAE(arguments)

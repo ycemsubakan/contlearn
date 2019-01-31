@@ -20,6 +20,14 @@ parser = argparse.ArgumentParser(description='continual learning MEGR')
 
 parser.add_argument('--use_visdom', type=int, default=0, 
                     help='use/not use visdom, {0, 1}')
+parser.add_argument('--visdom_server', type=str, default='',
+                    help='the visdom server address')
+parser.add_argument('--visdom_env', type=str, default='',
+                    help='the visdom environment to use')
+parser.add_argument('--visdom_port', type=str, default='',
+                    help='the port to use for visdom')
+
+
 parser.add_argument('--debug', action='store_true', 
                     help='debugging mode skips stuff')
 parser.add_argument('--load_models', action='store_true', 
@@ -131,7 +139,7 @@ arguments.cuda = torch.cuda.is_available()
 arguments.number_components = copy.deepcopy(arguments.number_components_init)
 
 if arguments.use_visdom:
-    vis = visdom.Visdom(port=5800, server='', env='',
+    vis = visdom.Visdom(port=arguments.visdom_port, server=arguments.visdom_server, env=arguments.visdom_env,
                     use_incoming_socket=False)
     assert vis.check_connection()
 assert arguments.semi_sup + arguments.use_classifier < 2
@@ -165,6 +173,11 @@ if arguments.dataset_name == 'dynamic_mnist':
 elif arguments.dataset_name == 'omniglot':
     Lclass = 50
     datapath = 'omniglot_files/'
+elif arguments.dataset_name == 'omniglot_char':
+    Lclass = 100
+    datapath = 'omniglot_char_files/'
+    arguments.dynamic_binarization = 0
+    arguments.input_type = 'binary'
 elif arguments.dataset_name == 'fashion_mnist': 
     Lclass = 10
     datapath = 'fashion_mnist_files/'
@@ -180,19 +193,21 @@ if not os.path.exists(datapath):
     train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
     ut.separate_datasets(train_loader, 'train', Lclass, datapath)
     ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
-    ut.separate_datasets(val_loader, 'test', Lclass, datapath)
+    ut.separate_datasets(test_loader, 'test', Lclass, datapath)
+
+C = 8 
+train_loader = ut.get_mnist_loaders([C], 'train', arguments, path=datapath)
+test_loader = ut.get_mnist_loaders([C], 'test', arguments, path=datapath)
+val_loader = ut.get_mnist_loaders([C], 'validation', arguments, path=datapath)
 
 
-#C = 29 
-#train_loader = ut.get_mnist_loaders([C], 'train', arguments, path='omniglot_files/')
-#test_loader = ut.get_mnist_loaders([C], 'test', arguments, path='omniglot_files/')
-#
-#
 #dt = next(iter(train_loader))
 #vis.images(dt[0].reshape(-1, 1, 28, 28))
-##
-#dt = next(iter(test_loader))
-#vis.images(dt[0].reshape(-1, 1, 28, 28))
+#
+for dt in val_loader:
+    pass
+
+vis.images(dt[0].reshape(-1, 1, 28, 28))
 
 # importing model
 if arguments.model_name == 'vae':
@@ -253,6 +268,9 @@ if arguments.dataset_name == 'dynamic_mnist':
 elif arguments.dataset_name == 'omniglot':
     permutations = torch.load('omniglotpermutations_seed2_2019-01-1105:32:33.684197.t')
     # dont yet have the file for omniglot
+elif arguments.dataset_name == 'omniglot_char':
+    permutations = torch.load('omniglot_charpermutations_seed2_2019-01-2918:09:07.470900.t')
+    expert_path = 'joint_models/joint_classifier_omniglot_characcuracy_0.4860000014305115.t'
 
 elif arguments.dataset_name == 'mnist_plus_fmnist':
     permutations = torch.load('mnist_plus_fmnist_m1permutations_seed2_2019-01-1414:53:53.285461.t')
@@ -327,7 +345,7 @@ for dg in range(0, Lclass):
         t1 = time.time()
         EPconv = tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                                    optimizer, dr, arguments.model_name, prev_model=prev_model, 
-                                   dg=dg, perm=perm, classifier=classifier) 
+                                   dg=dg, perm=perm, classifier=classifier, vis=vis) 
         t2 = time.time()
 
     # rebalancing:
