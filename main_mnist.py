@@ -191,14 +191,22 @@ elif arguments.dataset_name == 'mnist_plus_fmnist':
 
 if not os.path.exists(datapath):
     train_loader, val_loader, test_loader, arguments = load_dataset(arguments)
+
+    #sanity check for omniglot dataset
+    if arguments.dataset_name == 'omniglot_char':
+        tr_set = train_loader.dataset.__dict__['tensors'][0][:2500].reshape(-1, 1, 28, 28)
+        tr_set_labels = train_loader.dataset.__dict__['tensors'][1]
+        
+        val_set_labels = val_loader.dataset.__dict__['tensors'][1]
+
+        num_labels = np.zeros(max(tr_set_labels))
+        for k in range(max(tr_set_labels)):
+            num_labels[k] = (val_set_labels == k).sum().item()
+        assert min(num_labels) > 0, 'validation set has empty classes!' 
+
     ut.separate_datasets(train_loader, 'train', Lclass, datapath)
     ut.separate_datasets(val_loader, 'validation', Lclass, datapath)
     ut.separate_datasets(test_loader, 'test', Lclass, datapath)
-
-C = 8 
-train_loader = ut.get_mnist_loaders([C], 'train', arguments, path=datapath)
-test_loader = ut.get_mnist_loaders([C], 'test', arguments, path=datapath)
-val_loader = ut.get_mnist_loaders([C], 'validation', arguments, path=datapath)
 
 
 #dt = next(iter(train_loader))

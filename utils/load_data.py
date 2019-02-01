@@ -423,11 +423,11 @@ def load_omniglot(args, n_validation=4000, **kwargs):
 
     return train_loader, val_loader, test_loader, args
 
-def load_omniglot_char(args, n_validation=4000, **kwargs):
+def load_omniglot_char(args, n_validation=3, **kwargs):
     # set args
     args.input_size = [1, 28, 28]
     args.input_type = 'binary'
-    args.dynamic_binarization = True
+    args.dynamic_binarization = False
 
     # start processing
     def reshape_data(data):
@@ -449,20 +449,19 @@ def load_omniglot_char(args, n_validation=4000, **kwargs):
     unique = list(np.unique(test_tar))
     y_test = np.array([unique.index(tar) for tar in test_tar])
 
-    # shuffle train data
-    randperm = np.random.permutation(train_ft.shape[0])
-    train_ft = train_ft[randperm]
-    train_tar = train_tar_un[randperm]
-
-    #np.random.shuffle(train_ft)
-    #np.random.shuffle(train_tar)
+    # do the split for validation / train
+    inds_val = np.zeros(train_tar_un.shape[0]).astype('bool')
+    for k in range(max(train_tar_un)):
+        inds = np.where(train_tar_un == k)[0]
+        inds_val[inds[:n_validation]] = 1
+    inds_tr = (1 - inds_val).astype('bool')
 
     # set train and validation data
-    x_train = train_ft[:-n_validation]
-    x_val = train_ft[-n_validation:]
+    x_train = train_ft[inds_tr]
+    x_val = train_ft[inds_val]
 
-    y_train = train_tar[:-n_validation] 
-    y_val = train_tar[-n_validation:] 
+    y_train = train_tar_un[inds_tr] 
+    y_val = train_tar_un[inds_val] 
 
     train = data_utils.TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
     train_loader = data_utils.DataLoader(train, batch_size=args.batch_size, shuffle=True, **kwargs)

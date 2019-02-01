@@ -12,7 +12,7 @@ print(host)
 
 #changes: prior, replays, second clause in costc
 
-PRIORS = ['vampprior_short'] #['vampprior_short', 'standard']
+PRIORS = ['vampprior_short', 'standard']
 REPLAYS = ['increase', 'constant']
 ADD_CAP = [1]
 #CLASSIFIER = [1]
@@ -33,7 +33,7 @@ vamp_mix = VAMP_MIX[0]
 cnt = 0 
 for prior in PRIORS:
     if prior == 'vampprior_short':
-        REBALANCES = [1]#[0, 1]
+        REBALANCES = [0, 1]
     elif prior == 'standard':
         REBALANCES = [0]
 
@@ -42,8 +42,8 @@ for prior in PRIORS:
             for db in DYNAMIC_BINARIZATION:
                 for permid in PERM_RANGE:
 
-                    if (prior == 'vampprior_short') and replay == 'constant':
-                        COSTC = [1] #[0, 1]
+                    if replay == 'constant':
+                        COSTC = [0, 1]
                     else: 
                         COSTC = [1]
 
