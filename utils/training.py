@@ -289,6 +289,18 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
                 else:
                     loss_cls = loss_cls + loss_cls_prev
 
+                #if args.classifier_rejection:
+                #    disc_loss = nn.BCEWithLogitsLoss(size_average=True)
+                #    dischat_real = classifier.discriminator_forward(data)
+                #    real_targets = torch.ones(dischat_real.size(0))
+                #    loss_real = disc_loss(dischat_real.squeeze(), real_targets)
+
+                #    dischat_fake = classifier.discriminator_forward(x_gen)
+                #    fake_targets = torch.zeros(dischat_fake.size(0))
+                #    loss_fake = disc_loss(dischat_fake.squeeze(), fake_targets)
+
+                #    loss_cls = loss_cls + loss_fake + loss_real
+
             # backward pass
             loss_cls.backward()
             # optimization
@@ -296,6 +308,41 @@ def train_classifier(args, train_loader, perm=torch.arange(10),
         
         print('EP {} batch {}, loss {}'.format(ep, batch_idx, loss_cls))
 
+def train_discriminator(args, train_loader, perm=torch.arange(10),
+                        classifier=None, prev_classifier=None, cur_model=None, x_replay_prevmodel=None, 
+                        optimizer_cls=None, dg=0):
+
+    disc_loss = nn.BCEWithLogitsLoss(reduction='mean')
+    EP = 90
+    for ep in range(EP):
+        for data, _ in train_loader:
+            if args.cuda:
+                data = data.cuda()
+            
+            optimizer_cls.zero_grad()
+            if not x_replay_prevmodel is None: 
+                data_real = torch.cat([data, x_replay_prevmodel], dim=0)
+            else:
+                data_real = data
+            dischat_real = classifier.discriminator_forward(data_real)
+
+            real_targets = torch.ones(dischat_real.size(0))
+            if args.cuda:
+                real_targets = real_targets.cuda()
+            loss_real = disc_loss(dischat_real.squeeze(), real_targets)
+
+            xgen = cur_model.generate_x(data_real.size(0))
+            dischat_fake = classifier.discriminator_forward(xgen)
+            fake_targets = torch.zeros(dischat_fake.size(0))
+            if args.cuda:
+                fake_targets = fake_targets.cuda()
+            loss_fake = disc_loss(dischat_fake.squeeze(), fake_targets)
+
+            loss = loss_real + loss_fake
+            loss.backward(retain_graph=True)
+
+            optimizer_cls.step()
+            print('Discriminator loss: {}, epoch {}'.format(loss.item(), ep))
 
 
 
@@ -339,7 +386,66 @@ def train_vae(epoch, args, train_loader, model,
             if args.semi_sup:
                 x_replay, y_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
             else:    
-                x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+                if args.classifier_rejection:
+                    eps = 1e-10
+                    gam = -1 
+
+                    Ntar = cst*data.size(0) 
+                    Nrep = max([4000, Ntar])
+                    x_replay = prev_model.generate_x(Nrep, replay=True)
+
+                    yhats = classifier.forward(x_replay).max(dim=1)
+                    discs = classifier.discriminator_forward(x_replay).squeeze()
+                    mx_disc = discs.max()
+
+                    temp = discs - mx_disc
+                        
+                    fs = temp - torch.log(1 - (temp - eps).exp())
+                    temp, _ = fs.sort(descending=False)
+                    gam = temp[int(Nrep * 0.7)]
+                    fs = fs - gam
+
+                    ps = torch.sigmoid(fs)
+
+                    us = torch.rand(Nrep)
+                    if args.cuda:
+                        us = us.cuda()
+
+                    decs = (us < fs) 
+                    print('number of RJS accepts {}'.format(decs.sum().item()))
+
+                    x_replay = x_replay[decs][:Ntar]
+
+                    #pdb.set_trace()
+                    #if dg == 2:
+                    #    pdb.set_trace()
+                    #sorted_discs, sort_inds = discs.squeeze().sort(descending=True)
+                    #all_replays = []
+                    #all_scores = []
+                    #for dig in range(dg):
+                    #    dg_inds = (yhats[1] == perm[dig].item())
+                    #    class_inds = [ind.item() for ind in sort_inds if dg_inds[ind].item()]
+
+                    #    inds_sel = torch.tensor(class_inds)[:(Ntar//(dg))]
+                    #    all_replays.append(x_replay[inds_sel])
+                    #    all_scores.append(discs[inds_sel])
+                    #print('av. replay disc. score {}'.format(torch.cat(all_scores).mean().item()) )
+                    #x_replay = torch.cat(all_replays, dim=0)
+                else:
+                    Ntar = cst*data.size(0) 
+                    x_replay = prev_model.generate_x(Ntar, replay=True)
+                
+                #good_enough = False
+
+                #while not good_enough:
+                #    x_replay = prev_model.generate_x((cst)*data.size(0), replay=True)
+
+                #    # eliminating the bad samples 
+                #    discs = classifier.forward(x_replay)
+                #    maxs = discs.max(1)[0]
+                #    min_max = maxs.min()
+                #    if min_max > 22:
+                #        good_enough = True
             
             if args.replay_size == 'increase': 
                 data = torch.cat([data, x_replay.data], dim=0)
@@ -425,20 +531,56 @@ def train_vae(epoch, args, train_loader, model,
             if batch_idx % 300 == 0:
                 print('batch {}, loss {}, nent {}'.format(batch_idx, loss, nent))
 
+        #if 0: 
+        #    #mean_means = model.reconstruct_means()[-2:].mean(0)
+        #    #mean_data = x[:12].mean(0)
+        #    #if args.use_visdom:
+        #    #    toshow = torch.cat([mean_means.reshape(1, 1, 28, 28), 
+        #    #                        mean_data.reshape(1, 1, 28, 28)], dim=0)
+        #    #    vis.images(toshow, win='mean_means')
+        #    #template_cost = (mean_means - mean_data).abs().mean()
+        #    #print('template_cost {}'.format(template_cost.item()))
+        #    #loss = loss + template_cost
+        #    if dg > 0: 
+        #        if not args.restart_means:
+        #            num = args.number_components_init
+        #            cur_means = model.reconstruct_means()[:-num]
+        #            prev_means = prev_model.reconstruct_means()
+        #            if args.use_visdom:
+        #                vis.images(prev_means.reshape(-1, 1, 28, 28), win='prev_means')
+
+        #            template_cost = 30*(cur_means - prev_means).abs().mean()
+        #            print('template_cost {}'.format(template_cost.item()))
+        #            loss = loss + template_cost
 
         if batch_idx % 300 == 0:
             print('batch {}, loss {}'.format(batch_idx, loss))
 
         # backward pass
         loss.backward()
+
+        #if 1:
+        #    if dg > 0:
+        #        num = args.number_components_init
+        #        print('num {}'.format(num))
+        #        model.means.linear.weight.grad.data[:, :-num] = 0 
+
         # optimization
         optimizer.step()
         
-        if model.args.prior == 'GMM':
-            model.pis.data = model.pis.data.abs() / model.pis.data.abs().sum()
-            if model.GMM.covariance_type == 'diag':
-                model.sigs.data = F.relu(model.sigs.data)
+        # train the discriminator
+        
+        if (epoch % 20 == 0) and args.classifier_rejection:
+            if dg == 0:
+                train_discriminator(args, train_loader, perm=torch.arange(10),
+                                    classifier=classifier, prev_classifier=None, cur_model=model, x_replay_prevmodel=None, 
+                                    optimizer_cls=optimizer_cls, dg=0)
+            else:
+                train_discriminator(args, train_loader, perm=torch.arange(10),
+                                    classifier=classifier, prev_classifier=None, cur_model=model, x_replay_prevmodel=x_replay, 
+                                    optimizer_cls=optimizer_cls, dg=0)
 
+        
         train_loss += loss.item()
         train_re += -RE.item()
         train_kl += KL.item()

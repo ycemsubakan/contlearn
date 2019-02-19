@@ -9,19 +9,29 @@ from torchvision import datasets, transforms
 import itertools as it
 import copy
 
-def separate_datasets(loader, dataset_type, Klabels, folder):
+def separate_datasets(loader, dataset_type, Ktasks, folder, use_task_ids=False):
     fts = []
     labels = []
-    for i, (ft, tar) in enumerate(loader):   
-        fts.append(ft)
-        labels.append(tar)
+    task_labels = []
+
+    if use_task_ids:
+        for i, (ft, tar, task) in enumerate(loader):   
+            fts.append(ft)
+            labels.append(tar)
+            task_labels.append(task)
+    else:
+        for i, (ft, tar) in enumerate(loader):   
+            fts.append(ft)
+            labels.append(tar)
+            task_labels.append(tar)
     
     all_fts = torch.cat(fts, dim=0)
     all_labels = torch.cat(labels, dim=0)
+    all_task_labels = torch.cat(task_labels, dim=0)
 
     datasets = [] 
-    for lb in range(Klabels):
-        mask = torch.eq(all_labels, lb)
+    for task_lb in range(Ktasks):
+        mask = torch.eq(all_task_labels, task_lb)
         inds = torch.nonzero(mask).squeeze()
         dt = torch.index_select(all_fts, dim=0, index=inds)
         lbls = torch.index_select(all_labels, dim=0, index=inds)

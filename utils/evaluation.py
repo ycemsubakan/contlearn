@@ -14,6 +14,8 @@ import pdb
 import itertools as it
 import torch.nn.functional as F
 import pickle
+from sklearn.metrics import confusion_matrix
+
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 # ======================================================================================================================
@@ -391,5 +393,7 @@ def evaluate_classifier(args, classifier, data_loader):
     # backward map: 0 -> 1, 1->2, 2->4, 3->0, 4->3
 
     acc = (all_preds_cat == all_lbls_cat).float().mean()
-    return acc, all_preds_cat
+    confmat = confusion_matrix(all_lbls_cat.data.cpu().numpy(), all_preds_cat.data.cpu().numpy())
+
+    return acc, confmat
 

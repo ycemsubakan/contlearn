@@ -117,6 +117,7 @@ parser.add_argument('--use_classifier', type=int, default=1, help='whether or no
 parser.add_argument('--use_mixingw_correction', type=int, default=0, help='whether or not to use mixing weight correction, {0, 1}')
 parser.add_argument('--use_replaycostcorrection', type=int, default=0, help='whether or not to use a constant for replay cost correction, {0, 1}')
 parser.add_argument('--use_entrmax', type=int, default=1, help='whether or not to use entropy maximization, {0, 1}')
+parser.add_argument('--classifier_rejection', type=int, default=0, help='whether or not to use discriminator rejection in replays')
 
 # semi supervise
 parser.add_argument('--semi_sup', type=int, default=0, help='whether or not to do semi-supervised learning')
@@ -142,6 +143,8 @@ if arguments.use_visdom:
     vis = visdom.Visdom(port=arguments.visdom_port, server=arguments.visdom_server, env=arguments.visdom_env,
                     use_incoming_socket=False)
     assert vis.check_connection()
+else:
+    vis = None
 assert arguments.semi_sup + arguments.use_classifier < 2
 
 torch.manual_seed(arguments.seed)
@@ -209,13 +212,24 @@ if not os.path.exists(datapath):
     ut.separate_datasets(test_loader, 'test', Lclass, datapath)
 
 
-#dt = next(iter(train_loader))
-#vis.images(dt[0].reshape(-1, 1, 28, 28))
+#val_loader = ut.get_mnist_loaders([0], 'validation', arguments, path=datapath)
+#test_loader = ut.get_mnist_loaders([0], 'test', arguments, path=datapath)
 #
-for dt in val_loader:
-    pass
+#dt = next(iter(val_loader))
+#opts = {'title' : 'validation'}
+#vis.images(dt[0].reshape(-1, 1, 28, 28), opts=opts, win='val')
+#
+#
+#dt = next(iter(test_loader))
+#opts = {'title' : 'test'}
+#vis.images(dt[0].reshape(-1, 1, 28, 28), opts=opts, win='test')
+#
+#pdb.set_trace()
+#
+#for dt in val_loader:
+#    pass
 
-vis.images(dt[0].reshape(-1, 1, 28, 28))
+#vis.images(dt[0].reshape(-1, 1, 28, 28))
 
 # importing model
 if arguments.model_name == 'vae':
@@ -288,7 +302,8 @@ elif arguments.dataset_name == 'fashion_mnist':
     permutations = torch.load('fashion_mnistpermutations_seed2_2019-01-1517:29:07.967413.t')
     expert_path = 'joint_models/joint_classifier_fashion_mnistaccuracy_0.8858000040054321.t'
 
-expert_classifier.load_state_dict(torch.load(expert_path))
+
+#expert_classifier.load_state_dict(torch.load(expert_path))
 
 perm = permutations[arguments.permindex]
 
@@ -335,7 +350,7 @@ for dg in range(0, Lclass):
                             prev_model=prev_model,
                             optimizer_cls=optimizer_cls, dg=dg, perm=perm)
 
-        acc, all_preds = ev.evaluate_classifier(arguments, classifier, test_loader)        
+        acc, confmat = ev.evaluate_classifier(arguments, classifier, test_loader)        
         print('Digits upto {}, accuracy {}'.format(dg, acc.item()))
 
     if (arguments.debug or arguments.load_models) and os.path.exists(model_path):
@@ -347,13 +362,18 @@ for dg in range(0, Lclass):
         EPconv = t1 = t2 = 0   
     else:
         print('training model... for digit {}'.format(dg))
-        optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
+        if 1:
+            optimizer = AdamNormGrad(model.parameters(), lr=arguments.lr)
+        #else: 
+        #    optimizer = AdamNormGrad([model.means.linear.weight, model.mixingw.linear.weight] , lr=arguments.lr)
+
         if arguments.cuda:
             model = model.cuda()
         t1 = time.time()
         EPconv = tr.experiment_vae(arguments, train_loader, val_loader, test_loader, model, 
                                    optimizer, dr, arguments.model_name, prev_model=prev_model, 
-                                   dg=dg, perm=perm, classifier=classifier, vis=vis) 
+                                   dg=dg, perm=perm, classifier=classifier, 
+                                   optimizer_cls=optimizer_cls, vis=vis) 
         t2 = time.time()
 
     # rebalancing:
@@ -392,9 +412,10 @@ for dg in range(0, Lclass):
             except:
                 print('failed to open results for task {}, now getting evaluations'.format(dg))
                 results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
-                results['digit'] = dg
+                results['digit'] = int(perm[dg].item())
                 if arguments.use_classifier: 
-                    results['class'] = acc.item()
+                    results['test_acc'] = acc.item()
+                    results['test_confmat'] = confmat
                 results['time'] = t2 - t1
                 results['epochs'] = EPconv
                 results['prior_class_ass'] = prior_class_ass
@@ -403,9 +424,10 @@ for dg in range(0, Lclass):
                 pickle.dump(all_results, open(results_path + results_name + '.pk', 'wb')) 
         else:
             results = ev.evaluate_vae(arguments, model, train_loader, test_loader, 0, results_path, 'test', use_mixw_cor=arguments.use_mixingw_correction, perm=perm, dg=dg, results_name=results_name, classifier=classifier, expert_classifier=expert_classifier)
-            results['digit'] = dg
+            results['digit'] = int(perm[dg].item())
             if arguments.use_classifier: 
-                results['class'] = acc.item()
+                results['test_acc'] = acc.item()
+                results['test_confmat'] = confmat
             results['time'] = t2 - t1
             results['epochs'] = EPconv
             results['prior_class_ass'] = prior_class_ass

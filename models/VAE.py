@@ -29,12 +29,23 @@ import copy
 from utils.nn import he_init, GatedDense, NonLinear, \
     Conv2d, GatedConv2d, GatedResUnit, ResizeGatedConv2d, MaskedConv2d, ResUnitBN, ResizeConv2d, GatedResUnit, GatedConvTranspose2d
 
+def net_init(m):
+    print(type(m))
+    lst = ['ConvTranspose2d', 'Linear', 'Conv2d']
+    check = [itm in str(type(m)) for itm in lst]
+    if any(check):
+        try:
+            torch.nn.init.xavier_uniform(m.weight)
+            c = 0.1
+            torch.nn.init.uniform_(m.bias, 0.2, 0.4)
+        except:
+            pass
 
 class VAE(Model):
     def __init__(self, args):
         super(VAE, self).__init__(args)
 
-        Khid = 40 
+        Khid = 100 
         arc = 'conv'
         self.Khid = Khid
         self.arc = arc
@@ -66,11 +77,11 @@ class VAE(Model):
                 GatedConv2d(32, Khid, 7, 1, 0, activation=act),
             )])
 
-            self.q_z_mean = Linear(Khid, self.args.z1_size)
-            self.q_z_logvar = NonLinear(Khid, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
+            self.q_z_mean = GatedDense(Khid, self.args.z1_size)
+            self.q_z_logvar = GatedDense(Khid, self.args.z1_size, activation=nn.Hardtanh(min_val=-6.,max_val=2.))
 
             self.p_x_layers = nn.Sequential(
-                GatedConvTranspose2d(Khid, 32, 7, 1, 0, activation=act),
+                GatedConvTranspose2d(self.args.z1_size, 32, 7, 1, 0, activation=act),
                 GatedConvTranspose2d(32, 32, 3, 2, 1, activation=act),
                 GatedConvTranspose2d(32, self.args.input_size[0], 4, 2, 0, activation=nn.Sigmoid())
             )
@@ -86,10 +97,11 @@ class VAE(Model):
         #    self.p_x_logvar = NonLinear(300, np.prod(self.args.input_size), activation=nn.Hardtanh(min_val=-4.5,max_val=0))
         self.mixingw_c = np.ones(self.args.number_components)
 
+
+        self.apply(net_init)
         # weights initialization
-        for m in self.modules():
-            if isinstance(m, nn.Linear): # or isinstance(m, nn.ConvTranspose2d):
-                he_init(m)
+                    #if isinstance(m, nn.Linear): # or isinstance(m, nn.ConvTranspose2d):
+            #    he_init(m)
 
         
 
@@ -517,8 +529,10 @@ class VAE(Model):
     # THE MODEL: VARIATIONAL POSTERIOR
     def q_z(self, x, head=0):
         if self.arc == 'conv':
-            if self.args.dataset_name in ['omniglot_char']:
+            if self.args.dataset_name in ['omniglot_char', 'dynamic_mnist', 'fashion_mnist', 'mnist_plus_fmnist']:
                 x = x.reshape(-1, 1, 28, 28)
+            else:
+                raise NameError('I dont know what dataset is that')
 
         x = self.q_z_layers[head](x)
 
@@ -732,9 +746,13 @@ class classifier(nn.Module):
             self.fc2 = nn.Linear(50, Lclass)
             self.apply(Xavier)
 
+        if args.classifier_rejection:
+            self.disc = GatedDense(K, 1, activation=None)
+
 
     def forward(self, x):
         if self.architecture == 'ff':
+            #pdb.set_trace()
             out = self.layer(x)
             return out
         elif self.architecture == 'conv':
@@ -750,6 +768,13 @@ class classifier(nn.Module):
             x = self.relu(self.fc1(x))
             x = self.fc2(x)
             return x
+
+    def discriminator_forward(self, x):
+        if self.architecture == 'ff':
+            fts = self.layer[0].forward(x)
+            discs = self.disc(fts)
+            return discs
+
 
 
 
